@@ -17,6 +17,7 @@ struct ErrorResult: Encodable {
 struct ModifyResult: Encodable {
     let success: Bool
     let eventId: String
+    let startTime: String
     let endTime: String
 }
 
@@ -93,41 +94,85 @@ func listEvents(params: [String: String]) {
 }
 
 func modifyEvent(params: [String: String]) {
-    guard let id = params["id"], let endTimeStr = params["endTime"] else {
-        printJSON(ErrorResult(error: "--id and --endTime are required"))
+    guard let id = params["id"] else {
+        printJSON(ErrorResult(error: "--id is required"))
         return
     }
-
+    guard params["startTime"] != nil || params["endTime"] != nil || params["notes"] != nil else {
+        printJSON(ErrorResult(error: "--startTime, --endTime, or --notes is required"))
+        return
+    }
     guard let event = store.event(withIdentifier: id) else {
         printJSON(ErrorResult(error: "Event not found: \(id)"))
         return
     }
 
-    let parts = endTimeStr.split(separator: ":")
-    guard parts.count == 2,
-          let hour = Int(parts[0]),
-          let minute = Int(parts[1]),
-          hour >= 0, hour < 24,
-          minute >= 0, minute < 60 else {
-        printJSON(ErrorResult(error: "Invalid endTime format. Use HH:mm"))
-        return
+    func parseTime(_ s: String, base: Date) -> Date? {
+        let p = s.split(separator: ":")
+        guard p.count == 2, let h = Int(p[0]), let m = Int(p[1]),
+              (0..<24).contains(h), (0..<60).contains(m) else { return nil }
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: base)
+        c.hour = h; c.minute = m; c.second = 0
+        return Calendar.current.date(from: c)
     }
 
-    var comps = Calendar.current.dateComponents([.year, .month, .day], from: event.startDate)
-    comps.hour = hour; comps.minute = minute; comps.second = 0
+    let hasTimeChange = params["startTime"] != nil || params["endTime"] != nil
+    let notesValue    = params["notes"]
 
-    guard let newEnd = Calendar.current.date(from: comps) else {
-        printJSON(ErrorResult(error: "Failed to compute new end date"))
-        return
+    if let s = params["startTime"] {
+        guard let d = parseTime(s, base: event.startDate) else {
+            printJSON(ErrorResult(error: "Invalid startTime format. Use HH:mm")); return
+        }
+        event.startDate = d
+    }
+    if let s = params["endTime"] {
+        guard let d = parseTime(s, base: event.startDate) else {
+            printJSON(ErrorResult(error: "Invalid endTime format. Use HH:mm")); return
+        }
+        event.endDate = d
     }
 
-    event.endDate = newEnd
+    // 시간과 메모를 동시에 저장 시 EventKit이 메모를 무시하는 경우가 있으므로
+    // 시간 변경이 있을 때는 먼저 시간만 저장 → 이벤트 재조회 → 메모 별도 저장
+    if hasTimeChange {
+        if let n = notesValue { event.notes = n.isEmpty ? nil : n }
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+        } catch {
+            printJSON(ErrorResult(error: error.localizedDescription)); return
+        }
 
-    do {
-        try store.save(event, span: .thisEvent, commit: true)
-        printJSON(ModifyResult(success: true, eventId: id, endTime: endTimeStr))
-    } catch {
-        printJSON(ErrorResult(error: error.localizedDescription))
+        // 메모도 변경이 있다면: 재조회 후 메모만 따로 저장 (detach 후 새 ID 대응)
+        if let n = notesValue {
+            let currentId = event.eventIdentifier ?? id
+            if let refreshed = store.event(withIdentifier: currentId) {
+                refreshed.notes = n.isEmpty ? nil : n
+                do {
+                    try store.save(refreshed, span: .thisEvent, commit: true)
+                } catch {
+                    printJSON(ErrorResult(error: error.localizedDescription)); return
+                }
+                let startStr = String(dateFormatter.string(from: refreshed.startDate).suffix(5))
+                let endStr   = String(dateFormatter.string(from: refreshed.endDate).suffix(5))
+                printJSON(ModifyResult(success: true, eventId: refreshed.eventIdentifier ?? currentId, startTime: startStr, endTime: endStr))
+                return
+            }
+        }
+
+        let startStr = String(dateFormatter.string(from: event.startDate).suffix(5))
+        let endStr   = String(dateFormatter.string(from: event.endDate).suffix(5))
+        printJSON(ModifyResult(success: true, eventId: event.eventIdentifier ?? id, startTime: startStr, endTime: endStr))
+    } else {
+        // 메모만 변경
+        if let n = notesValue { event.notes = n.isEmpty ? nil : n }
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            let startStr = String(dateFormatter.string(from: event.startDate).suffix(5))
+            let endStr   = String(dateFormatter.string(from: event.endDate).suffix(5))
+            printJSON(ModifyResult(success: true, eventId: event.eventIdentifier ?? id, startTime: startStr, endTime: endStr))
+        } catch {
+            printJSON(ErrorResult(error: error.localizedDescription))
+        }
     }
 }
 

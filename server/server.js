@@ -47,21 +47,33 @@ app.get('/api/events', async (req, res) => {
     }
 });
 
-// PUT /api/events/:id  { endTime: "HH:mm" }
+// PUT /api/events/:id  { startTime?: "HH:mm", endTime?: "HH:mm" }
 app.put('/api/events/*', async (req, res) => {
     const id = decodeURIComponent(req.params[0]);
-    const { endTime } = req.body;
+    const { startTime, endTime, notes } = req.body;
 
-    if (!endTime) {
-        return res.status(400).json({ error: 'endTime is required' });
+    if (!startTime && !endTime && notes === undefined) {
+        return res.status(400).json({ error: 'startTime, endTime, or notes is required' });
     }
-    if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(endTime)) {
+    const timeRe = /^([01]?\d|2[0-3]):[0-5]\d$/;
+    if (startTime && !timeRe.test(startTime)) {
+        return res.status(400).json({ error: 'startTime format must be HH:mm' });
+    }
+    if (endTime && !timeRe.test(endTime)) {
         return res.status(400).json({ error: 'endTime format must be HH:mm' });
     }
+    const args = ['modify', '--id', id];
+    if (startTime)           args.push('--startTime', startTime);
+    if (endTime)             args.push('--endTime', endTime);
+    if (notes !== undefined) args.push('--notes', notes);
+
+    console.log('[modify] args:', args.map((a, i) => i > 0 && args[i-1] === '--notes' ? `"${a.slice(0,60).replace(/\n/g,'↵')}..."` : a).join(' '));
     try {
-        const result = await runCLI(['modify', '--id', id, '--endTime', endTime]);
+        const result = await runCLI(args);
+        console.log('[modify] ok:', JSON.stringify(result));
         res.json(result);
     } catch (err) {
+        console.error('[modify] error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
