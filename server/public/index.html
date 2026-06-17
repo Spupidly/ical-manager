@@ -8,6 +8,52 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a1a; }
 
+  /* 로그인 */
+  #loginOverlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: #f0f2f5;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  #loginOverlay.show { display: flex; }
+  .login-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 36px 32px;
+    width: 320px;
+    max-width: 90vw;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .login-card h2 { font-size: 20px; font-weight: 700; color: #333; text-align: center; margin-bottom: 4px; }
+  .login-input {
+    width: 100%;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .login-input:focus { border-color: #007aff; }
+  .login-btn {
+    background: #007aff;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 11px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  .login-btn:disabled { background: #aaa; cursor: not-allowed; }
+  .login-error { font-size: 13px; color: #e74c3c; text-align: center; min-height: 18px; }
+
   /* Header */
   .header {
     background: #fff;
@@ -465,6 +511,16 @@
 </head>
 <body>
 
+<div id="loginOverlay">
+  <div class="login-card">
+    <h2>📅 iCal 관리</h2>
+    <input class="login-input" type="text"     id="loginUser" placeholder="아이디" autocomplete="username">
+    <input class="login-input" type="password" id="loginPass" placeholder="비밀번호" autocomplete="current-password">
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">로그인</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
 <div class="header">
   <div class="header-title-row">
     <h1>📅 iCal 관리</h1>
@@ -579,6 +635,76 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ── 인증 ──────────────────────────────────────────────
+const TOKEN_KEY = 'ical_auth_token';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+function showLogin(msg) {
+  document.getElementById('loginError').textContent = msg || '';
+  document.getElementById('loginOverlay').classList.add('show');
+}
+function hideLogin() {
+  document.getElementById('loginOverlay').classList.remove('show');
+}
+
+async function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const btn  = document.getElementById('loginBtn');
+  const err  = document.getElementById('loginError');
+  err.textContent = '';
+  btn.disabled = true;
+  btn.textContent = '로그인 중...';
+  try {
+    const res  = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user, pass })
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error || '로그인 실패'; return; }
+    setToken(data.token);
+    hideLogin();
+  } catch {
+    err.textContent = '서버에 연결할 수 없습니다.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '로그인';
+  }
+}
+
+function authHeaders() {
+  const t = getToken();
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+}
+
+async function apiFetch(url, options = {}) {
+  options.headers = { ...options.headers, ...authHeaders() };
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    clearToken();
+    showLogin('세션이 만료되었습니다. 다시 로그인해주세요.');
+    throw new Error('인증이 필요합니다.');
+  }
+  return res;
+}
+
+// 페이지 로드 시 토큰 없으면 로그인 화면 표시
+if (!getToken()) showLogin();
+
+// 로그인 폼 Enter 키 처리
+document.addEventListener('DOMContentLoaded', () => {
+  ['loginUser', 'loginPass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  });
+});
+// ─────────────────────────────────────────────────────
+
 let allEvents = [];
 let currentEvent = null;
 let initStart = null, initEnd = null; // 모달 열릴 때 입력란 초기값 (비교 기준)
@@ -793,7 +919,7 @@ async function fetchEvents() {
   document.getElementById('eventList').innerHTML = '<div class="loading">캘린더 데이터를 불러오는 중...</div>';
 
   try {
-    const res = await fetch(`/api/events?start=${start}&end=${end}`);
+    const res = await apiFetch(`/api/events?start=${start}&end=${end}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     allEvents = data;
@@ -1044,7 +1170,7 @@ async function verifyAfterSave(savedId, changes) {
   await new Promise(r => setTimeout(r, 1000));
 
   try {
-    const res  = await fetch(`/api/events?start=${start}&end=${end}`);
+    const res  = await apiFetch(`/api/events?start=${start}&end=${end}`);
     const data = await res.json();
     if (data.error || !Array.isArray(data)) return;
 
@@ -1078,7 +1204,7 @@ async function verifyAfterSave(savedId, changes) {
 }
 
 async function callModifyAPI(eventId, changes) {
-  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}`, {
+  const res = await apiFetch(`/api/events/${encodeURIComponent(eventId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(changes)
