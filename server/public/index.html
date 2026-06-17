@@ -23,11 +23,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     margin-bottom: 12px;
   }
+  .header-title-row h1 { margin-right: auto; }
   .controls {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     flex-wrap: wrap;
   }
@@ -91,7 +94,7 @@
     color: #555;
     cursor: pointer;
     user-select: none;
-    margin-left: 8px;
+    white-space: nowrap;
   }
   .filter-toggle input { cursor: pointer; }
 
@@ -465,6 +468,10 @@
 <div class="header">
   <div class="header-title-row">
     <h1>📅 iCal 관리</h1>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filterWarnings" onchange="renderEvents()">
+      ⚠️만 보기
+    </label>
     <div class="mode-tabs">
       <button class="mode-tab active" data-mode="month" onclick="switchMode('month')">월별</button>
       <button class="mode-tab" data-mode="week"  onclick="switchMode('week')">주별</button>
@@ -485,10 +492,6 @@
     </div>
     <button class="btn-search" id="btnSearch" onclick="fetchEvents()">조회</button>
     <span class="badge-warning" id="warningBadge" style="display:none"></span>
-    <label class="filter-toggle">
-      <input type="checkbox" id="filterWarnings" onchange="renderEvents()">
-      ⚠️만 보기
-    </label>
   </div>
   <!-- 날짜 피커 열릴 때 헤더 하단에 표시되는 빠른 선택 패널 (touch 기기 전용) -->
   <div id="dateQuickPanel">
@@ -657,10 +660,19 @@ function navigatePeriod(dir) {
     const s = document.getElementById('startDate').value;
     const e = document.getElementById('endDate').value;
     if (!s || !e) return;
-    const sd = addMonths(new Date(s + 'T00:00:00'), dir);
-    const ed = addMonths(new Date(e + 'T00:00:00'), dir);
-    document.getElementById('startDate').value = toDateStr(sd);
-    document.getElementById('endDate').value   = toDateStr(ed);
+    const startD = new Date(s + 'T00:00:00');
+    const endD   = new Date(e + 'T00:00:00');
+    const days   = Math.round((endD - startD) / 86400000) + 1; // 조회 기간 일수
+    let newStart, newEnd;
+    if (dir === 1) { // 다음 기간: 시작 = 기존 종료 + 1일
+      newStart = new Date(endD); newStart.setDate(newStart.getDate() + 1);
+      newEnd   = new Date(newStart); newEnd.setDate(newEnd.getDate() + days - 1);
+    } else {         // 이전 기간: 종료 = 기존 시작 - 1일
+      newEnd   = new Date(startD); newEnd.setDate(newEnd.getDate() - 1);
+      newStart = new Date(newEnd); newStart.setDate(newStart.getDate() - (days - 1));
+    }
+    document.getElementById('startDate').value = toDateStr(newStart);
+    document.getElementById('endDate').value   = toDateStr(newEnd);
   }
   fetchEvents();
 }
@@ -706,6 +718,12 @@ function gotoToday() {
   document.getElementById('endDate').value     = `${y}-${m}-${d}`;
   // 초기 모드: month → singleDate 숨기기
   document.getElementById('singleDate').style.display = 'none';
+
+  // 날짜/월 입력 변경 시 자동 재조회
+  document.getElementById('singleMonth').addEventListener('change', fetchEvents);
+  document.getElementById('singleDate').addEventListener('change', fetchEvents);
+  document.getElementById('startDate').addEventListener('change', fetchEvents);
+  document.getElementById('endDate').addEventListener('change', fetchEvents);
 })();
 
 // HH:mm 패턴 추출 (날짜 헤더가 있으면 해당 날짜 섹션만, 없으면 전체)
@@ -798,7 +816,7 @@ function renderEvents() {
   const badge    = document.getElementById('warningBadge');
   if (allEvents.length > 0) {
     badge.style.display = '';
-    badge.textContent   = `⚠️ ${warnings.length}건`;
+    badge.textContent   = `⚠️ ${warnings.length}건 / 총 ${allEvents.length}건`;
   } else {
     badge.style.display = 'none';
   }
