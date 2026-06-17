@@ -1,3 +1,7 @@
+# Swift build artifacts
+swift/.build/
+*.dSYM/
+
 # Logs
 logs
 *.log

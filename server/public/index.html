@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iCal 관리</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a1a; }
+
+  /* Header */
+  .header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 16px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .header h1 { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #333; }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .controls label { font-size: 13px; color: #666; }
+  .controls input[type="date"] {
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+  }
+  .controls input[type="date"]:focus { border-color: #007aff; }
+  .btn-search {
+    background: #007aff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-search:hover { background: #0066dd; }
+  .btn-search:disabled { background: #aaa; cursor: not-allowed; }
+  .badge-warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 12px;
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+    margin-left: 8px;
+  }
+  .filter-toggle input { cursor: pointer; }
+
+  /* Event List */
+  .event-list { padding: 20px 24px; max-width: 900px; margin: 0 auto; }
+  .date-group { margin-bottom: 20px; }
+  .date-header {
+    font-size: 13px;
+    font-weight: 700;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 0;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 8px;
+  }
+
+  /* Event Row */
+  .event-row {
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+    padding: 12px 16px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: box-shadow 0.15s, border-color 0.15s;
+  }
+  .event-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: #ccc; }
+  .event-row.warning { border-left: 3px solid #ffc107; }
+  .event-row.no-memo { border-left: 3px solid #adb5bd; }
+  .event-row.ok { border-left: 3px solid #28a745; }
+
+  .status-icon { font-size: 18px; flex-shrink: 0; }
+  .event-info { flex: 1; min-width: 0; }
+  .event-title { font-size: 14px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-time { font-size: 12px; color: #888; margin-top: 2px; }
+  .event-memo-hint { font-size: 11px; color: #ffa500; margin-top: 2px; }
+  .event-calendar { font-size: 11px; color: #999; margin-top: 1px; }
+
+  .btn-quickfix {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-quickfix:hover { background: #ffc107; color: #fff; border-color: #e0a800; }
+
+  /* Empty / Loading */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+    font-size: 14px;
+  }
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+    font-size: 14px;
+  }
+
+  /* Modal Overlay */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 480px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    padding: 20px 24px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a1a;
+    flex: 1;
+  }
+  .modal-calendar-name {
+    font-size: 12px;
+    color: #999;
+    margin-top: 3px;
+  }
+  .btn-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #999;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .btn-close:hover { color: #333; }
+
+  .modal-body { padding: 16px 24px; }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #999;
+    margin-bottom: 8px;
+    margin-top: 16px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  .time-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .time-card {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .time-card-label { font-size: 11px; color: #888; margin-bottom: 3px; }
+  .time-card-value { font-size: 16px; font-weight: 700; color: #1a1a1a; }
+  .time-card-value.mismatch { color: #e74c3c; }
+  .time-card-value.match { color: #28a745; }
+  .time-card-value.empty { color: #ccc; font-weight: 400; font-size: 13px; }
+
+  .edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .edit-row input[type="time"] {
+    flex: 1;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 15px;
+    outline: none;
+  }
+  .edit-row input[type="time"]:focus { border-color: #007aff; }
+  .btn-save {
+    background: #007aff;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-save:hover { background: #0066dd; }
+  .btn-save:disabled { background: #aaa; cursor: not-allowed; }
+
+  .notes-box {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #444;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 150px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .notes-empty { color: #bbb; font-style: italic; }
+
+  /* AI placeholder */
+  .ai-area {
+    margin-top: 16px;
+    min-height: 44px;
+    border: 1px dashed #e0e0e0;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ccc;
+    font-size: 12px;
+  }
+
+  .modal-footer {
+    padding: 12px 24px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .btn-secondary {
+    background: #f0f2f5;
+    color: #555;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: #e4e6e9; }
+
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1a1a1a;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 300;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📅 iCal 관리</h1>
+  <div class="controls">
+    <label>시작</label>
+    <input type="date" id="startDate">
+    <label>종료</label>
+    <input type="date" id="endDate">
+    <button class="btn-search" id="btnSearch" onclick="fetchEvents()">조회</button>
+    <span class="badge-warning" id="warningBadge" style="display:none"></span>
+    <label class="filter-toggle">
+      <input type="checkbox" id="filterWarnings" onchange="renderEvents()">
+      ⚠️만 보기
+    </label>
+  </div>
+</div>
+
+<div class="event-list" id="eventList">
+  <div class="empty-state">기간을 선택하고 조회 버튼을 눌러주세요.</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-calendar-name" id="modalCalendar"></div>
+      </div>
+      <button class="btn-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="section-label">캘린더 시간</div>
+      <div class="time-grid">
+        <div class="time-card">
+          <div class="time-card-label">시작</div>
+          <div class="time-card-value" id="calStartVal"></div>
+        </div>
+        <div class="time-card">
+          <div class="time-card-label">종료</div>
+          <div class="time-card-value" id="calEndVal"></div>
+        </div>
+      </div>
+
+      <div class="section-label">메모에서 추출한 시간</div>
+      <div class="time-grid">
+        <div class="time-card">
+          <div class="time-card-label">예상 시작</div>
+          <div class="time-card-value" id="memoStartVal"></div>
+        </div>
+        <div class="time-card">
+          <div class="time-card-label">예상 종료</div>
+          <div class="time-card-value" id="memoEndVal"></div>
+        </div>
+      </div>
+
+      <div class="section-label">종료시간 수정</div>
+      <div class="edit-row">
+        <input type="time" id="newEndTime">
+        <button class="btn-save" id="btnSave" onclick="saveEndTime()">저장</button>
+      </div>
+
+      <div class="section-label">메모 내용</div>
+      <div class="notes-box" id="notesBox"></div>
+
+      <!-- AI 분석 영역 예약 -->
+      <div class="ai-area" id="aiArea">AI 분석 버튼이 여기에 추가됩니다</div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allEvents = [];
+let currentEvent = null;
+
+// 날짜 기본값: 이번 달 1일 ~ 오늘
+(function initDates() {
+  const today = new Date();
+  const y = today.getFullYear(), m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  document.getElementById('startDate').value = `${y}-${m}-01`;
+  document.getElementById('endDate').value = `${y}-${m}-${d}`;
+})();
+
+// HH:mm 패턴 추출
+function extractTimes(notes) {
+  if (!notes) return [];
+  return notes.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g) || [];
+}
+
+// 이벤트 상태 분석
+function analyzeEvent(event) {
+  const times = extractTimes(event.notes);
+  const calStart = event.startTime.slice(11, 16);
+  const calEnd   = event.endTime.slice(11, 16);
+
+  if (!event.notes || event.notes.trim() === '' || times.length === 0) {
+    return { status: 'no-memo', times, memoStart: null, memoEnd: null, calStart, calEnd };
+  }
+
+  const memoStart = times[0];
+  const memoEnd   = times[times.length - 1];
+  const status    = calEnd !== memoEnd ? 'warning' : 'ok';
+
+  return { status, times, memoStart, memoEnd, calStart, calEnd };
+}
+
+// API 호출
+async function fetchEvents() {
+  const start = document.getElementById('startDate').value;
+  const end   = document.getElementById('endDate').value;
+  if (!start || !end) { showToast('기간을 선택해주세요.'); return; }
+
+  const btn = document.getElementById('btnSearch');
+  btn.disabled = true;
+  btn.textContent = '조회 중...';
+  document.getElementById('eventList').innerHTML = '<div class="loading">캘린더 데이터를 불러오는 중...</div>';
+
+  try {
+    const res = await fetch(`/api/events?start=${start}&end=${end}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    allEvents = data;
+    renderEvents();
+  } catch (err) {
+    document.getElementById('eventList').innerHTML =
+      `<div class="empty-state">오류: ${escHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '조회';
+  }
+}
+
+// 이벤트 렌더링
+function renderEvents() {
+  const filterOn = document.getElementById('filterWarnings').checked;
+  const events   = filterOn ? allEvents.filter(e => analyzeEvent(e).status === 'warning') : allEvents;
+
+  const warnings = allEvents.filter(e => analyzeEvent(e).status === 'warning');
+  const badge    = document.getElementById('warningBadge');
+  if (allEvents.length > 0) {
+    badge.style.display = '';
+    badge.textContent   = `⚠️ ${warnings.length}건`;
+  } else {
+    badge.style.display = 'none';
+  }
+
+  const container = document.getElementById('eventList');
+  if (events.length === 0) {
+    container.innerHTML = '<div class="empty-state">' +
+      (allEvents.length === 0 ? '조회 결과가 없습니다.' : '⚠️ 항목이 없습니다.') + '</div>';
+    return;
+  }
+
+  // 날짜별 그룹화
+  const groups = {};
+  events.forEach(e => {
+    const date = e.startTime.slice(0, 10);
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(e);
+  });
+
+  let html = '';
+  Object.keys(groups).sort().forEach(date => {
+    const label = formatDateLabel(date);
+    html += `<div class="date-group"><div class="date-header">${label}</div>`;
+    groups[date].forEach(event => {
+      html += renderEventRow(event);
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function renderEventRow(event) {
+  const analysis = analyzeEvent(event);
+  const { status, memoEnd, calEnd } = analysis;
+  const id = escAttr(event.id);
+
+  const statusIcon = { warning: '⚠️', 'no-memo': '📝', ok: '✅' }[status] || '❓';
+  const hint = status === 'warning'
+    ? `<div class="event-memo-hint">메모 종료: ${memoEnd}  /  캘린더 종료: ${calEnd}</div>`
+    : '';
+
+  const quickBtn = status === 'warning' && memoEnd
+    ? `<button class="btn-quickfix" onclick="event.stopPropagation();quickFix('${id}','${memoEnd}')">이 시간으로 수정</button>`
+    : '';
+
+  return `
+    <div class="event-row ${status}" onclick="openModal('${id}')" data-id="${id}">
+      <span class="status-icon">${statusIcon}</span>
+      <div class="event-info">
+        <div class="event-title">${escHtml(event.title)}</div>
+        <div class="event-time">${event.startTime.slice(11,16)} ~ ${event.endTime.slice(11,16)}</div>
+        ${hint}
+        <div class="event-calendar">${escHtml(event.calendar)}</div>
+      </div>
+      ${quickBtn}
+    </div>`;
+}
+
+// 빠른 수정 (모달 없이)
+async function quickFix(eventId, memoEnd) {
+  const event = allEvents.find(e => e.id === eventId);
+  if (!event) return;
+  try {
+    await callModifyAPI(eventId, memoEnd);
+    event.endTime = event.endTime.slice(0, 11) + memoEnd;
+    renderEvents();
+    showToast(`✅ 종료시간을 ${memoEnd}로 수정했습니다.`);
+  } catch (err) {
+    showToast('저장 실패: ' + err.message, true);
+  }
+}
+
+// 모달 열기
+function openModal(eventId) {
+  const event = allEvents.find(e => e.id === eventId);
+  if (!event) return;
+  currentEvent = event;
+
+  const analysis = analyzeEvent(event);
+  const { memoStart, memoEnd, calStart, calEnd, status } = analysis;
+
+  document.getElementById('modalTitle').textContent    = event.title;
+  document.getElementById('modalCalendar').textContent = event.calendar + '  |  ' + event.startTime.slice(0, 10);
+
+  setTimeCard('calStartVal', calStart, null);
+  setTimeCard('calEndVal',   calEnd,   null);
+  setTimeCard('memoStartVal', memoStart, memoStart && memoStart !== calStart ? 'mismatch' : memoStart ? 'match' : null);
+  setTimeCard('memoEndVal',   memoEnd,   memoEnd   && memoEnd   !== calEnd   ? 'mismatch' : memoEnd   ? 'match' : null);
+
+  document.getElementById('newEndTime').value = memoEnd || calEnd;
+
+  const notesBox = document.getElementById('notesBox');
+  if (event.notes) {
+    notesBox.textContent = event.notes;
+    notesBox.className   = 'notes-box';
+  } else {
+    notesBox.textContent = '메모 없음';
+    notesBox.className   = 'notes-box notes-empty';
+  }
+
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function setTimeCard(id, value, cssClass) {
+  const el = document.getElementById(id);
+  el.textContent = value || '없음';
+  el.className   = 'time-card-value' + (value ? (cssClass ? ' ' + cssClass : '') : ' empty');
+}
+
+// 모달 닫기
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  currentEvent = null;
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+// 종료시간 저장
+async function saveEndTime() {
+  const endTime = document.getElementById('newEndTime').value;
+  if (!endTime || !currentEvent) return;
+
+  const savedId = currentEvent.id;
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+
+  try {
+    await callModifyAPI(savedId, endTime);
+    const event = allEvents.find(e => e.id === savedId);
+    event.endTime = event.endTime.slice(0, 11) + endTime;
+
+    closeModal();
+    renderEvents();
+    showToast(`✅ 종료시간을 ${endTime}로 수정했습니다.`);
+
+    // 다음 ⚠️ 항목으로 자동 포커스
+    setTimeout(() => {
+      const warnings = allEvents.filter(e => analyzeEvent(e).status === 'warning');
+      const savedEvent = allEvents.find(e => e.id === savedId);
+      const next = warnings.find(e => e.startTime > savedEvent.startTime)
+                || (warnings.length > 0 ? warnings[0] : null);
+      if (next) openModal(next.id);
+    }, 400);
+  } catch (err) {
+    showToast('저장 실패: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '저장';
+  }
+}
+
+async function callModifyAPI(eventId, endTime) {
+  const res = await fetch(`/api/events/${encodeURIComponent(eventId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endTime })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// 날짜 레이블
+function formatDateLabel(dateStr) {
+  const d   = new Date(dateStr + 'T00:00:00');
+  const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+  return `${dateStr} (${day})`;
+}
+
+// Toast 알림
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent  = msg;
+  t.style.background = isError ? '#e74c3c' : '#1a1a1a';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// XSS 방어
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(str) {
+  return String(str).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+</body>
+</html>
