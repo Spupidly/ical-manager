@@ -116,6 +116,20 @@ app.put('/api/events/*', async (req, res) => {
     }
 });
 
+// DELETE /api/events/:id
+app.delete('/api/events/*', async (req, res) => {
+    const id = decodeURIComponent(req.params[0]);
+    console.log('[delete] id:', id);
+    try {
+        const result = await runCLI(['delete', '--id', id]);
+        console.log('[delete] ok:', JSON.stringify(result));
+        res.json(result);
+    } catch (err) {
+        console.error('[delete] error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/events/:id/analyze — reserved for AI
 app.post('/api/events/*/analyze', (req, res) => {
     res.status(501).json({ message: 'AI analysis not yet implemented' });

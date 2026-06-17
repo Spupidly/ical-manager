@@ -21,6 +21,11 @@ struct ModifyResult: Encodable {
     let endTime: String
 }
 
+struct DeleteResult: Encodable {
+    let success: Bool
+    let eventId: String
+}
+
 let store = EKEventStore()
 let semaphore = DispatchSemaphore(value: 0)
 let cliArgs = CommandLine.arguments
@@ -178,8 +183,23 @@ func modifyEvent(params: [String: String]) {
     }
 }
 
+func deleteEvent(params: [String: String]) {
+    guard let id = params["id"] else {
+        printJSON(ErrorResult(error: "--id is required")); return
+    }
+    guard let event = store.event(withIdentifier: id) else {
+        printJSON(ErrorResult(error: "Event not found: \(id)")); return
+    }
+    do {
+        try store.remove(event, span: .thisEvent, commit: true)
+        printJSON(DeleteResult(success: true, eventId: id))
+    } catch {
+        printJSON(ErrorResult(error: error.localizedDescription))
+    }
+}
+
 guard cliArgs.count >= 2 else {
-    printJSON(ErrorResult(error: "Usage: CalendarCLI <list|modify> [options]"))
+    printJSON(ErrorResult(error: "Usage: CalendarCLI <list|modify|delete> [options]"))
     exit(1)
 }
 
@@ -205,6 +225,8 @@ requestCalendarAccess { granted, error in
         listEvents(params: params)
     case "modify":
         modifyEvent(params: params)
+    case "delete":
+        deleteEvent(params: params)
     default:
         printJSON(ErrorResult(error: "Unknown command: \(cliArgs[1])"))
     }

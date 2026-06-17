@@ -283,6 +283,29 @@ HTTP Basic Auth는 모바일에서 팝업 지연이 심해 채택하지 않음.
 
 ---
 
+## v0.4.1 — 2026-06-18 (이벤트 삭제 기능 추가)
+
+상세 모달에서 이벤트를 삭제할 수 있는 기능 추가.
+
+### 흐름
+
+1. 모달 하단 좌측 `삭제` 버튼 클릭
+2. 이벤트 제목 포함 confirm 다이얼로그로 재확인
+3. `DELETE /api/events/:id` 요청 → Swift `delete` 커맨드 실행
+4. 삭제 성공 시 목록에서 즉시 제거, 모달 닫기, 토스트 알림
+
+반복 이벤트의 경우 `span: .thisEvent`로 해당 회차만 삭제.
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `swift/Sources/CalendarCLI/main.swift` | `DeleteResult` struct, `deleteEvent()` 함수, `case "delete"` 추가 |
+| `server/server.js` | `DELETE /api/events/*` 엔드포인트 추가 |
+| `server/public/index.html` | `.btn-danger` CSS, 삭제 버튼, `deleteEvent()` JS 함수 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석

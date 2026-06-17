@@ -355,6 +355,19 @@
   }
   .btn-save:hover { background: #0066dd; }
   .btn-save:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-danger {
+    background: #fff;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: auto;
+  }
+  .btn-danger:hover { background: #fff0ee; }
+  .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .notes-box {
     background: #f8f9fa;
@@ -626,6 +639,7 @@
 
     </div>
     <div class="modal-footer">
+      <button class="btn-danger" id="btnDelete" onclick="deleteEvent()">삭제</button>
       <button class="btn-secondary" onclick="closeModal()">닫기</button>
       <button class="btn-save" id="btnSave" onclick="saveTime()">저장</button>
     </div>
@@ -1056,6 +1070,30 @@ function setTimeCard(id, value, cssClass) {
 }
 
 // 모달 닫기
+async function deleteEvent() {
+  if (!currentEvent) return;
+  const title = currentEvent.title || '(제목 없음)';
+  if (!confirm(`"${title}" 일정을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+
+  const btn = document.getElementById('btnDelete');
+  btn.disabled = true;
+  btn.textContent = '삭제 중...';
+  const id = currentEvent.id;
+  try {
+    const res  = await apiFetch(`/api/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    allEvents = allEvents.filter(e => e.id !== id);
+    closeModal();
+    renderEvents();
+    showToast(`🗑️ "${title}" 삭제 완료`);
+  } catch (err) {
+    showToast('삭제 실패: ' + err.message, true);
+    btn.disabled = false;
+    btn.textContent = '삭제';
+  }
+}
+
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
   document.body.style.overflow = '';
