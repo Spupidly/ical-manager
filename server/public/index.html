@@ -18,7 +18,13 @@
     z-index: 100;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   }
-  .header h1 { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #333; }
+  .header h1 { font-size: 18px; font-weight: 700; color: #333; }
+  .header-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
   .controls {
     display: flex;
     align-items: center;
@@ -47,6 +53,27 @@
   }
   .btn-search:hover { background: #0066dd; }
   .btn-search:disabled { background: #aaa; cursor: not-allowed; }
+  /* 날짜 피커 팝업 위에 표시되는 빠른 선택 패널 (모바일 전용) */
+  #dateQuickPanel {
+    display: none; /* JS로 touch 환경에서만 표시 */
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0 2px;
+    border-top: 1px solid #eee;
+    margin-top: 8px;
+  }
+  .dq-btn {
+    background: #e8f4ff;
+    border: 1px solid #b3d7ff;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #007aff;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .dq-btn:active { background: #c5e3ff; }
   .badge-warning {
     background: #fff3cd;
     color: #856404;
@@ -67,6 +94,39 @@
     margin-left: 8px;
   }
   .filter-toggle input { cursor: pointer; }
+
+  .mode-tabs { display: flex; border: 1px solid #d0d0d0; border-radius: 7px; overflow: hidden; flex-shrink: 0; }
+  .mode-tab { background: #fff; border: none; padding: 6px 11px; font-size: 13px; color: #555; cursor: pointer; }
+  .mode-tab + .mode-tab { border-left: 1px solid #d0d0d0; }
+  .mode-tab.active { background: #007aff; color: #fff; font-weight: 600; }
+  #rangeWrap { align-items: center; gap: 8px; }
+
+  .nav-arrow {
+    display: none; /* 모바일은 스와이프, 데스크탑만 버튼 표시 */
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.93);
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    z-index: 150;
+    color: #444;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .nav-arrow { display: flex; }
+    .nav-arrow:hover { background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.18); color: #007aff; }
+  }
+  .nav-prev { left: 8px; }
+  .nav-next { right: 8px; }
 
   /* Event List */
   .event-list { padding: 20px 24px; max-width: 900px; margin: 0 auto; }
@@ -161,12 +221,19 @@
     justify-content: space-between;
     gap: 12px;
   }
-  .modal-title {
+  .modal-title-input {
     font-size: 17px;
     font-weight: 700;
     color: #1a1a1a;
-    flex: 1;
+    width: 100%;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    outline: none;
+    padding: 2px 0;
+    transition: border-color 0.15s;
   }
+  .modal-title-input:focus { border-bottom-color: #007aff; }
   .modal-calendar-name {
     font-size: 12px;
     color: #999;
@@ -371,7 +438,8 @@
   @media (max-width: 768px) {
     .notes-box,
     .time-card-input,
-    .controls input[type="date"] { font-size: 16px; }
+    .controls input[type="date"],
+    #singleMonth { font-size: 16px; }
   }
 
   /* 데스크탑(마우스): 클릭(포커스) 시에만 네이티브 time input 표시, blur 시 24h span 복귀 */
@@ -395,12 +463,26 @@
 <body>
 
 <div class="header">
-  <h1>📅 iCal 관리</h1>
+  <div class="header-title-row">
+    <h1>📅 iCal 관리</h1>
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="month" onclick="switchMode('month')">월별</button>
+      <button class="mode-tab" data-mode="week"  onclick="switchMode('week')">주별</button>
+      <button class="mode-tab" data-mode="day"   onclick="switchMode('day')">일별</button>
+      <button class="mode-tab" data-mode="range" onclick="switchMode('range')">기간</button>
+    </div>
+  </div>
   <div class="controls">
-    <label>시작</label>
-    <input type="date" id="startDate">
-    <label>종료</label>
-    <input type="date" id="endDate">
+    <div id="singleDateWrap" style="display:contents">
+      <input type="month" id="singleMonth">
+      <input type="date"  id="singleDate" style="display:none">
+    </div>
+    <div id="rangeWrap" style="display:none">
+      <label>시작</label>
+      <input type="date" id="startDate">
+      <label>종료</label>
+      <input type="date" id="endDate">
+    </div>
     <button class="btn-search" id="btnSearch" onclick="fetchEvents()">조회</button>
     <span class="badge-warning" id="warningBadge" style="display:none"></span>
     <label class="filter-toggle">
@@ -408,8 +490,15 @@
       ⚠️만 보기
     </label>
   </div>
+  <!-- 날짜 피커 열릴 때 헤더 하단에 표시되는 빠른 선택 패널 (touch 기기 전용) -->
+  <div id="dateQuickPanel">
+    <button class="dq-btn" id="dqThisMonth">이번달</button>
+    <button class="dq-btn" id="dqToday">오늘</button>
+  </div>
 </div>
 
+<button class="nav-arrow nav-prev" onclick="navigatePeriod(-1)" title="이전">‹</button>
+<button class="nav-arrow nav-next" onclick="navigatePeriod(1)"  title="다음">›</button>
 <div class="event-list" id="eventList">
   <div class="empty-state">기간을 선택하고 조회 버튼을 눌러주세요.</div>
 </div>
@@ -418,8 +507,8 @@
 <div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
   <div class="modal" id="modal">
     <div class="modal-header">
-      <div>
-        <div class="modal-title" id="modalTitle"></div>
+      <div style="flex:1;min-width:0">
+        <input type="text" class="modal-title-input" id="modalTitle" placeholder="이벤트 제목">
         <div class="modal-calendar-name" id="modalCalendar"></div>
       </div>
       <button class="btn-close" onclick="closeModal()">✕</button>
@@ -490,14 +579,133 @@
 let allEvents = [];
 let currentEvent = null;
 let initStart = null, initEnd = null; // 모달 열릴 때 입력란 초기값 (비교 기준)
+let currentMode = 'month';
+let lastQueryStart = '', lastQueryEnd = '';
 
-// 날짜 기본값: 이번 달 1일 ~ 오늘
+function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// 월 단위 날짜 이동 (말일 초과 시 해당 월 말일로 클램핑)
+function addMonths(date, months) {
+  const targetMonth = date.getMonth() + months;
+  const result = new Date(date.getFullYear(), targetMonth, 1);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  return new Date(result.getFullYear(), result.getMonth(), Math.min(date.getDate(), lastDay));
+}
+
+function getDateRange() {
+  if (currentMode === 'range') {
+    return { start: document.getElementById('startDate').value,
+             end:   document.getElementById('endDate').value };
+  }
+  if (currentMode === 'month') {
+    const val = document.getElementById('singleMonth').value; // YYYY-MM
+    if (!val) return { start: '', end: '' };
+    const [y, m] = val.split('-').map(Number);
+    return { start: toDateStr(new Date(y, m - 1, 1)),
+             end:   toDateStr(new Date(y, m, 0)) };
+  }
+  const dateVal = document.getElementById('singleDate').value;
+  if (!dateVal) return { start: '', end: '' };
+  const d = new Date(dateVal + 'T00:00:00');
+  if (currentMode === 'day') return { start: dateVal, end: dateVal };
+  if (currentMode === 'week') {
+    const day = d.getDay();
+    const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return { start: toDateStr(mon), end: toDateStr(sun) };
+  }
+  return { start: '', end: '' };
+}
+
+function switchMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.mode === mode)
+  );
+  const isRange = mode === 'range';
+  const isMonth = mode === 'month';
+  document.getElementById('singleDateWrap').style.display = isRange                ? 'none'     : 'contents';
+  document.getElementById('rangeWrap').style.display      = isRange                ? 'flex'     : 'none';
+  document.getElementById('singleMonth').style.display    = (!isRange && isMonth)  ? ''         : 'none';
+  document.getElementById('singleDate').style.display     = (!isRange && !isMonth) ? ''         : 'none';
+}
+
+// 이전/다음 기간으로 이동 후 재조회
+function navigatePeriod(dir) {
+  if (currentMode === 'month') {
+    const val = document.getElementById('singleMonth').value;
+    if (!val) return;
+    const [y, m] = val.split('-').map(Number);
+    const next = new Date(y, m - 1 + dir, 1);
+    document.getElementById('singleMonth').value =
+      `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+  } else if (currentMode === 'week') {
+    const val = document.getElementById('singleDate').value;
+    if (!val) return;
+    const d = new Date(val + 'T00:00:00');
+    d.setDate(d.getDate() + dir * 7);
+    document.getElementById('singleDate').value = toDateStr(d);
+  } else if (currentMode === 'day') {
+    const val = document.getElementById('singleDate').value;
+    if (!val) return;
+    const d = new Date(val + 'T00:00:00');
+    d.setDate(d.getDate() + dir);
+    document.getElementById('singleDate').value = toDateStr(d);
+  } else if (currentMode === 'range') {
+    const s = document.getElementById('startDate').value;
+    const e = document.getElementById('endDate').value;
+    if (!s || !e) return;
+    const sd = addMonths(new Date(s + 'T00:00:00'), dir);
+    const ed = addMonths(new Date(e + 'T00:00:00'), dir);
+    document.getElementById('startDate').value = toDateStr(sd);
+    document.getElementById('endDate').value   = toDateStr(ed);
+  }
+  fetchEvents();
+}
+
+// 이번달 단축 버튼
+function gotoThisMonth() {
+  const t = new Date();
+  const y = t.getFullYear(), m = String(t.getMonth() + 1).padStart(2, '0');
+  if (currentMode === 'month') {
+    document.getElementById('singleMonth').value = `${y}-${m}`;
+  } else if (currentMode === 'week' || currentMode === 'day') {
+    document.getElementById('singleDate').value = toDateStr(t);
+  } else if (currentMode === 'range') {
+    const lastDay = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+    document.getElementById('startDate').value = `${y}-${m}-01`;
+    document.getElementById('endDate').value   = toDateStr(lastDay);
+  }
+  fetchEvents();
+}
+
+// 오늘 단축 버튼
+function gotoToday() {
+  const t = new Date();
+  const y = t.getFullYear(), m = String(t.getMonth() + 1).padStart(2, '0');
+  if (currentMode === 'month') {
+    document.getElementById('singleMonth').value = `${y}-${m}`;
+  } else if (currentMode === 'week' || currentMode === 'day') {
+    document.getElementById('singleDate').value = toDateStr(t);
+  } else if (currentMode === 'range') {
+    document.getElementById('endDate').value = toDateStr(t);
+  }
+  fetchEvents();
+}
+
+// 날짜 기본값: 오늘
 (function initDates() {
   const today = new Date();
   const y = today.getFullYear(), m = String(today.getMonth() + 1).padStart(2, '0');
   const d = String(today.getDate()).padStart(2, '0');
-  document.getElementById('startDate').value = `${y}-${m}-01`;
-  document.getElementById('endDate').value = `${y}-${m}-${d}`;
+  document.getElementById('singleMonth').value = `${y}-${m}`;
+  document.getElementById('singleDate').value  = `${y}-${m}-${d}`;
+  document.getElementById('startDate').value   = `${y}-${m}-01`;
+  document.getElementById('endDate').value     = `${y}-${m}-${d}`;
+  // 초기 모드: month → singleDate 숨기기
+  document.getElementById('singleDate').style.display = 'none';
 })();
 
 // HH:mm 패턴 추출 (날짜 헤더가 있으면 해당 날짜 섹션만, 없으면 전체)
@@ -556,9 +764,10 @@ function analyzeEvent(event) {
 
 // API 호출
 async function fetchEvents() {
-  const start = document.getElementById('startDate').value;
-  const end   = document.getElementById('endDate').value;
+  const { start, end } = getDateRange();
   if (!start || !end) { showToast('기간을 선택해주세요.'); return; }
+  lastQueryStart = start;
+  lastQueryEnd   = end;
 
   const btn = document.getElementById('btnSearch');
   btn.disabled = true;
@@ -672,7 +881,7 @@ function openModal(eventId) {
   const analysis = analyzeEvent(event);
   const { memoStart, memoEnd, calStart, calEnd, status } = analysis;
 
-  document.getElementById('modalTitle').textContent    = event.title;
+  document.getElementById('modalTitle').value    = event.title;
   document.getElementById('modalCalendar').textContent = event.calendar + '  |  ' + event.startTime.slice(0, 10);
 
   setTimeCard('calStartVal', calStart, null);
@@ -738,10 +947,14 @@ async function saveTime() {
   const calStart = currentEvent.startTime.slice(11, 16);
   const calEnd   = currentEvent.endTime.slice(11, 16);
 
+  const newTitle  = document.getElementById('modalTitle').value.trim();
+  const origTitle = currentEvent.title;
+
   const changes = {};
-  if (st && st !== calStart) changes.startTime = st;
-  if (et && et !== calEnd)   changes.endTime   = et;
-  if (newNotes !== origNotes) changes.notes     = newNotes;
+  if (st && st !== calStart)              changes.startTime = st;
+  if (et && et !== calEnd)                changes.endTime   = et;
+  if (newNotes !== origNotes)             changes.notes     = newNotes;
+  if (newTitle && newTitle !== origTitle) changes.title     = newTitle;
 
   console.log('[saveTime] st:', st, '/ calStart:', calStart, '/ initStart:', initStart);
   console.log('[saveTime] et:', et, '/ calEnd:', calEnd, '/ initEnd:', initEnd);
@@ -768,10 +981,12 @@ async function saveTime() {
     if (changes.startTime)           event.startTime = event.startTime.slice(0, 11) + changes.startTime;
     if (changes.endTime)             event.endTime   = event.endTime.slice(0, 11)   + changes.endTime;
     if (changes.notes !== undefined) event.notes     = changes.notes;
+    if (changes.title)               event.title     = changes.title;
 
     closeModal();
     renderEvents();
     const parts = [];
+    if (changes.title)               parts.push(`제목 → ${changes.title}`);
     if (changes.startTime)           parts.push(`시작 → ${changes.startTime}`);
     if (changes.endTime)             parts.push(`종료 → ${changes.endTime}`);
     if (changes.notes !== undefined) parts.push('메모 저장');
@@ -804,8 +1019,8 @@ function updateTimeDisplay(inputId) {
 }
 
 async function verifyAfterSave(savedId, changes) {
-  const start = document.getElementById('startDate').value;
-  const end   = document.getElementById('endDate').value;
+  const start = lastQueryStart;
+  const end   = lastQueryEnd;
   if (!start || !end) return;
 
   await new Promise(r => setTimeout(r, 1000));
@@ -829,6 +1044,7 @@ async function verifyAfterSave(savedId, changes) {
     if (changes.startTime && fresh.startTime.slice(11,16) !== changes.startTime) mismatch = true;
     if (changes.endTime   && fresh.endTime.slice(11,16)   !== changes.endTime)   mismatch = true;
     if (changes.notes !== undefined && normalize(fresh.notes) !== normalize(changes.notes)) mismatch = true;
+    if (changes.title && fresh.title !== changes.title) mismatch = true;
 
     // allEvents를 서버 실제값으로 갱신
     allEvents = data;
@@ -1065,6 +1281,74 @@ function applyNoteTime(type, time) {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
 });
+
+// 날짜 피커 열릴 때 헤더에 빠른 선택 패널 표시 (touch 기기 전용)
+(function() {
+  const isTouch = () => navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+  const panel   = document.getElementById('dateQuickPanel');
+  const dateInputIds = ['singleMonth', 'singleDate', 'startDate', 'endDate'];
+  let hideTimer = null;
+
+  function showPanel() {
+    if (!isTouch()) return;
+    clearTimeout(hideTimer);
+    const showMonth = (currentMode === 'month' || currentMode === 'range');
+    document.getElementById('dqThisMonth').style.display = showMonth ? '' : 'none';
+    document.getElementById('dqToday').style.display     = showMonth ? 'none' : '';
+    panel.style.display = 'flex';
+  }
+  function hidePanel() {
+    panel.style.display = 'none';
+  }
+  function scheduleHide() {
+    // blur 직후 버튼 touchstart 가 발생할 수 있어 200ms 유예
+    hideTimer = setTimeout(hidePanel, 200);
+  }
+
+  dateInputIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('focus', showPanel);
+    el.addEventListener('blur',  scheduleHide);
+  });
+
+  // 버튼: pointerdown + preventDefault 로 input blur 방지 후 처리
+  function handleQuickBtn(fn) {
+    return function(e) {
+      e.preventDefault(); // input이 blur 되지 않도록 (focus 이동 차단)
+      clearTimeout(hideTimer);
+      fn();
+      // 네이티브 피커 닫기 위해 포커스된 input blur
+      const focused = document.activeElement;
+      if (focused && dateInputIds.includes(focused.id)) focused.blur();
+      hidePanel();
+    };
+  }
+
+  document.getElementById('dqThisMonth').addEventListener('pointerdown', handleQuickBtn(gotoThisMonth));
+  document.getElementById('dqToday').addEventListener('pointerdown',     handleQuickBtn(gotoToday));
+})();
+
+// 모바일: 이벤트 목록 좌/우 스와이프로 기간 이동
+(function() {
+  let sx = null, sy = null;
+  const el = document.getElementById('eventList');
+  el.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (sx === null) return;
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    sx = sy = null;
+    // 수평 스와이프가 수직보다 뚜렷하고 60px 이상일 때만 동작
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      navigatePeriod(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+})();
 </script>
 </body>
 </html>

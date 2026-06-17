@@ -98,8 +98,8 @@ func modifyEvent(params: [String: String]) {
         printJSON(ErrorResult(error: "--id is required"))
         return
     }
-    guard params["startTime"] != nil || params["endTime"] != nil || params["notes"] != nil else {
-        printJSON(ErrorResult(error: "--startTime, --endTime, or --notes is required"))
+    guard params["startTime"] != nil || params["endTime"] != nil || params["notes"] != nil || params["title"] != nil else {
+        printJSON(ErrorResult(error: "--startTime, --endTime, --notes, or --title is required"))
         return
     }
     guard let event = store.event(withIdentifier: id) else {
@@ -118,6 +118,8 @@ func modifyEvent(params: [String: String]) {
 
     let hasTimeChange = params["startTime"] != nil || params["endTime"] != nil
     let notesValue    = params["notes"]
+
+    if let t = params["title"], !t.isEmpty { event.title = t }
 
     if let s = params["startTime"] {
         guard let d = parseTime(s, base: event.startDate) else {

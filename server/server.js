@@ -50,10 +50,10 @@ app.get('/api/events', async (req, res) => {
 // PUT /api/events/:id  { startTime?: "HH:mm", endTime?: "HH:mm" }
 app.put('/api/events/*', async (req, res) => {
     const id = decodeURIComponent(req.params[0]);
-    const { startTime, endTime, notes } = req.body;
+    const { startTime, endTime, notes, title } = req.body;
 
-    if (!startTime && !endTime && notes === undefined) {
-        return res.status(400).json({ error: 'startTime, endTime, or notes is required' });
+    if (!startTime && !endTime && notes === undefined && title === undefined) {
+        return res.status(400).json({ error: 'startTime, endTime, notes, or title is required' });
     }
     const timeRe = /^([01]?\d|2[0-3]):[0-5]\d$/;
     if (startTime && !timeRe.test(startTime)) {
@@ -63,9 +63,10 @@ app.put('/api/events/*', async (req, res) => {
         return res.status(400).json({ error: 'endTime format must be HH:mm' });
     }
     const args = ['modify', '--id', id];
-    if (startTime)           args.push('--startTime', startTime);
-    if (endTime)             args.push('--endTime', endTime);
-    if (notes !== undefined) args.push('--notes', notes);
+    if (startTime)                           args.push('--startTime', startTime);
+    if (endTime)                             args.push('--endTime', endTime);
+    if (notes !== undefined)                 args.push('--notes', notes);
+    if (title !== undefined && title.trim()) args.push('--title', title.trim());
 
     console.log('[modify] args:', args.map((a, i) => i > 0 && args[i-1] === '--notes' ? `"${a.slice(0,60).replace(/\n/g,'↵')}..."` : a).join(' '));
     try {
