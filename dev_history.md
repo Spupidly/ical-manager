@@ -354,6 +354,33 @@ HTTP Basic Auth는 모바일에서 팝업 지연이 심해 채택하지 않음.
 
 ---
 
+## v0.5.1 — 2026-06-18 (자정 넘는 시간 처리 보완)
+
+### 버그 수정
+
+**모달 저장 시 `endTimeNextDay` 누락**  
+`saveTime`에서 `changes.endTime` 설정 시 `endTimeNextDay`를 포함하지 않아, 모달에서 직접 저장할 때 자정 넘는 종료 시간이 동일 날짜에 설정되어 "The Start Date must be before the end time" 오류 발생.  
+→ `toMinutes(et) < toMinutes(st || calStart)` 조건 시 `changes.endTimeNextDay = true` 포함.
+
+### 신규 기능
+
+**24시+ 표기 지원**  
+방송/일정 관리에서 자주 쓰이는 `24:10`, `25:30` 등 24시 이상 표기를 정상 처리.
+
+| 처리 | 내용 |
+|------|------|
+| 추출 | `TIME_RAW_RE`: `2[0-9]`로 확장, `normalizeTimeStr()`으로 24+ → 정규 HH:MM 변환 |
+| 다음날 감지 | 정규화 후 `toMinutes(memoEnd) < toMinutes(memoStart)` 로직 그대로 동작 |
+| 힌트 표시 | `findMemoEndLine()`에서 정규화 시간(`00:10`)과 원본 표기(`24:10`) 모두 검색 → 원본 메모 텍스트 그대로 표시 |
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | `TIME_RAW_RE`, `normalizeTimeStr()`, `extractRawTimes()`, `findMemoEndLine` 양방향 검색, `saveTime` endTimeNextDay 추가 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석

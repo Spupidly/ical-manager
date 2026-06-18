@@ -915,24 +915,38 @@ function normDateHeader(line) {
   return line.replace(/\/ +/g, '/'); // "2026/05/ 22" → "2026/05/22"
 }
 
+// 24시+ 표기 → 정규 HH:MM 변환 ("24:10" → "00:10", "25:30" → "01:30")
+const TIME_RAW_RE = /\b([01]?\d|2\d):[0-5]\d\b/g;
+function normalizeTimeStr(t) {
+  const [h, m] = t.split(':').map(Number);
+  if (h >= 24) return `${String(h - 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return t;
+}
+function extractRawTimes(text) {
+  return (text.match(TIME_RAW_RE) || []).map(normalizeTimeStr);
+}
+
 function extractTimesForDate(notes, eventDate) {
   if (!notes) return [];
-  if (!DATE_HEADER_RE.test(notes)) {
-    return notes.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g) || [];
-  }
-  const target = eventDate.replace(/-/g, '/'); // "2026-05-21" → "2026/05/21"
+  if (!DATE_HEADER_RE.test(notes)) return extractRawTimes(notes);
+  const target = eventDate.replace(/-/g, '/');
   let inSection = false;
   const relevant = [];
   for (const line of notes.split('\n')) {
     if (DATE_HEADER_RE.test(line)) inSection = normDateHeader(line).startsWith(target);
     if (inSection) relevant.push(line);
   }
-  return relevant.join('\n').match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g) || [];
+  return extractRawTimes(relevant.join('\n'));
 }
 
 // memoEnd 시간이 포함된 메모 줄 반환 (날짜 섹션 필터 적용)
 function findMemoEndLine(notes, eventDate, time) {
   if (!notes || !time) return null;
+  // 정규화된 시간("00:10")의 원본 24+표기("24:10")도 함께 검색
+  const [h, m] = time.split(':').map(Number);
+  const alt = `${h + 24}:${String(m).padStart(2, '0')}`;
+  const matches = (line) => line.includes(time) || line.includes(alt);
+
   let lines = notes.split('\n');
   if (DATE_HEADER_RE.test(notes)) {
     const target = eventDate.replace(/-/g, '/');
@@ -945,7 +959,7 @@ function findMemoEndLine(notes, eventDate, time) {
   }
   let result = null;
   for (const line of lines) {
-    if (line.includes(time)) result = line.trim();
+    if (matches(line)) result = line.trim();
   }
   return result;
 }
@@ -1232,7 +1246,10 @@ async function saveTime() {
 
   const changes = {};
   if (st && st !== calStart)              changes.startTime = st;
-  if (et && et !== calEnd)                changes.endTime   = et;
+  if (et && et !== calEnd) {
+    changes.endTime = et;
+    if (toMinutes(et) < toMinutes(st || calStart)) changes.endTimeNextDay = true;
+  }
   if (newNotes !== origNotes)             changes.notes     = newNotes;
   if (newTitle && newTitle !== origTitle) changes.title     = newTitle;
 
