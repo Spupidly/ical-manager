@@ -87,7 +87,7 @@ app.get('/api/events', async (req, res) => {
 // PUT /api/events/:id
 app.put('/api/events/*', async (req, res) => {
     const id = decodeURIComponent(req.params[0]);
-    const { startTime, endTime, notes, title } = req.body;
+    const { startTime, endTime, endTimeNextDay, notes, title } = req.body;
 
     if (!startTime && !endTime && notes === undefined && title === undefined) {
         return res.status(400).json({ error: 'startTime, endTime, notes, or title is required' });
@@ -102,6 +102,7 @@ app.put('/api/events/*', async (req, res) => {
     const args = ['modify', '--id', id];
     if (startTime)                           args.push('--startTime', startTime);
     if (endTime)                             args.push('--endTime', endTime);
+    if (endTime && endTimeNextDay)           args.push('--endDay', '1');
     if (notes !== undefined)                 args.push('--notes', notes);
     if (title !== undefined && title.trim()) args.push('--title', title.trim());
 

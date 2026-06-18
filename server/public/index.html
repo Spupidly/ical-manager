@@ -196,15 +196,32 @@
     background: #fff;
     border-radius: 8px;
     border: 1px solid #e8e8e8;
-    padding: 12px 16px;
+    padding: 18px 16px 12px;
     margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 12px;
     cursor: pointer;
     transition: box-shadow 0.15s, border-color 0.15s;
+    position: relative;
+    overflow: hidden;
   }
+  .event-time-bar {
+    position: absolute;
+    top: 0;
+    height: 5px;
+    border-radius: 0 2px 2px 0;
+  }
+  .event-row.ok      .event-time-bar { background: #28a745; }
+  .event-row.warning .event-time-bar { background: #ffa500; }
+  .event-row.no-memo .event-time-bar { background: #adb5bd; }
   .event-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-color: #ccc; }
+  @keyframes savedPulse {
+    0%   { background: #e8f4ff; box-shadow: 0 0 0 2px #007aff55; }
+    70%  { background: #e8f4ff; box-shadow: 0 0 0 2px #007aff55; }
+    100% { background: #fff;    box-shadow: none; }
+  }
+  .event-row.saved-highlight { animation: savedPulse 3s ease-out forwards; }
   .event-row.warning { border-left: 3px solid #ffc107; }
   .event-row.no-memo { border-left: 3px solid #adb5bd; }
   .event-row.ok { border-left: 3px solid #28a745; }
@@ -270,6 +287,27 @@
     justify-content: space-between;
     gap: 12px;
   }
+  .modal-nav {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .modal-nav-btn {
+    background: none;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+    color: #555;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .modal-nav-btn:hover { background: #f0f2f5; }
+  .modal-nav-btn:disabled { opacity: 0.3; cursor: default; }
   .modal-title-input {
     font-size: 17px;
     font-weight: 700;
@@ -583,6 +621,10 @@
         <input type="text" class="modal-title-input" id="modalTitle" placeholder="이벤트 제목">
         <div class="modal-calendar-name" id="modalCalendar"></div>
       </div>
+      <div class="modal-nav">
+        <button class="modal-nav-btn" id="modalNavPrev" onclick="navigateModal(-1)" title="이전 일정">‹</button>
+        <button class="modal-nav-btn" id="modalNavNext" onclick="navigateModal(1)"  title="다음 일정">›</button>
+      </div>
       <button class="btn-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -867,16 +909,22 @@ function gotoToday() {
 })();
 
 // HH:mm 패턴 추출 (날짜 헤더가 있으면 해당 날짜 섹션만, 없으면 전체)
+// 날짜 헤더 감지: "2026/05/21" 또는 "2026/05/ 22" 처럼 슬래시 뒤 공백 허용
+const DATE_HEADER_RE = /^\d{4}\/\d{2}\/ ?\d{1,2}/m;
+function normDateHeader(line) {
+  return line.replace(/\/ +/g, '/'); // "2026/05/ 22" → "2026/05/22"
+}
+
 function extractTimesForDate(notes, eventDate) {
   if (!notes) return [];
-  if (!/^\d{4}\/\d{2}\/\d{2}/m.test(notes)) {
+  if (!DATE_HEADER_RE.test(notes)) {
     return notes.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g) || [];
   }
-  const target = eventDate.replace(/-/g, '/'); // "2026-06-17" → "2026/06/17"
+  const target = eventDate.replace(/-/g, '/'); // "2026-05-21" → "2026/05/21"
   let inSection = false;
   const relevant = [];
   for (const line of notes.split('\n')) {
-    if (/^\d{4}\/\d{2}\/\d{2}/.test(line)) inSection = line.startsWith(target);
+    if (DATE_HEADER_RE.test(line)) inSection = normDateHeader(line).startsWith(target);
     if (inSection) relevant.push(line);
   }
   return relevant.join('\n').match(/\b([01]?\d|2[0-3]):[0-5]\d\b/g) || [];
@@ -886,12 +934,12 @@ function extractTimesForDate(notes, eventDate) {
 function findMemoEndLine(notes, eventDate, time) {
   if (!notes || !time) return null;
   let lines = notes.split('\n');
-  if (/^\d{4}\/\d{2}\/\d{2}/m.test(notes)) {
+  if (DATE_HEADER_RE.test(notes)) {
     const target = eventDate.replace(/-/g, '/');
     let inSection = false;
     lines = [];
     for (const line of notes.split('\n')) {
-      if (/^\d{4}\/\d{2}\/\d{2}/.test(line)) inSection = line.startsWith(target);
+      if (DATE_HEADER_RE.test(line)) inSection = normDateHeader(line).startsWith(target);
       if (inSection) lines.push(line);
     }
   }
@@ -903,21 +951,35 @@ function findMemoEndLine(notes, eventDate, time) {
 }
 
 // 이벤트 상태 분석
+function toMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
 function analyzeEvent(event) {
   const times = extractTimesForDate(event.notes, event.startTime.slice(0, 10));
   const calStart = event.startTime.slice(11, 16);
   const calEnd   = event.endTime.slice(11, 16);
 
   if (!event.notes || event.notes.trim() === '' || times.length === 0) {
-    return { status: 'no-memo', times, memoStart: null, memoEnd: null, memoEndLine: null, calStart, calEnd };
+    return { status: 'no-memo', times, memoStart: null, memoEnd: null, memoEndNextDay: false, memoEndLine: null, calStart, calEnd };
   }
 
-  const memoStart   = calStart;
-  const memoEnd     = times[times.length - 1];
-  const memoEndLine = findMemoEndLine(event.notes, event.startTime.slice(0, 10), memoEnd);
-  const status      = calEnd !== memoEnd ? 'warning' : 'ok';
+  const memoStart = calStart;
+  const memoEnd   = times[times.length - 1];
 
-  return { status, times, memoStart, memoEnd, memoEndLine, calStart, calEnd };
+  // 메모 시간이 자정을 넘는 경우 감지: 종료 시간이 시작 시간보다 이전이면 다음날
+  const memoEndNextDay = toMinutes(memoEnd) < toMinutes(memoStart);
+
+  // 캘린더 종료가 다음날인지 (event.endTime 날짜가 시작 날짜보다 이후)
+  const calEndNextDay  = event.endTime.slice(0, 10) > event.startTime.slice(0, 10);
+
+  const memoEndLine = findMemoEndLine(event.notes, event.startTime.slice(0, 10), memoEnd);
+
+  // 시간과 다음날 여부가 모두 일치해야 ok
+  const status = (calEnd === memoEnd && calEndNextDay === memoEndNextDay) ? 'ok' : 'warning';
+
+  return { status, times, memoStart, memoEnd, memoEndNextDay, memoEndLine, calStart, calEnd };
 }
 
 // API 호출
@@ -991,20 +1053,32 @@ function renderEvents() {
 
 function renderEventRow(event) {
   const analysis = analyzeEvent(event);
-  const { status, memoEnd, memoEndLine, calEnd } = analysis;
+  const { status, memoEnd, memoEndNextDay, memoEndLine, calEnd } = analysis;
   const id = escAttr(event.id);
 
   const statusIcon = { warning: '⚠️', 'no-memo': '📝', ok: '✅' }[status] || '❓';
+  const memoEndLabel = memoEnd ? (memoEndNextDay ? `다음날 ${memoEnd}` : memoEnd) : '';
+  const hintText = memoEndLine
+    ? (memoEndNextDay ? `다음날 ${memoEndLine}` : memoEndLine)
+    : memoEndLabel;
   const hint = status === 'warning'
-    ? `<div class="event-memo-hint">메모 종료: ${escHtml(memoEndLine || memoEnd)}</div>`
+    ? `<div class="event-memo-hint">메모 종료: ${escHtml(hintText)}</div>`
     : '';
 
   const quickBtn = status === 'warning' && memoEnd
-    ? `<button class="btn-quickfix" onclick="event.stopPropagation();quickFix('${id}','${memoEnd}')">이 시간으로 수정</button>`
+    ? `<button class="btn-quickfix" onclick="event.stopPropagation();quickFix('${id}','${memoEnd}',${memoEndNextDay})">이 시간으로 수정</button>`
     : '';
+
+  // 24시간 기준 시간 막대
+  const sh = parseInt(event.startTime.slice(11,13)) * 60 + parseInt(event.startTime.slice(14,16));
+  const eh = parseInt(event.endTime.slice(11,13))   * 60 + parseInt(event.endTime.slice(14,16));
+  const leftPct  = (sh / 1440 * 100).toFixed(2);
+  const widthPct = (Math.max(eh - sh, 15) / 1440 * 100).toFixed(2); // 최소 15분 폭
+  const timeBar  = `<div class="event-time-bar" style="left:${leftPct}%;width:${widthPct}%"></div>`;
 
   return `
     <div class="event-row ${status}" onclick="openModal('${id}')" data-id="${id}">
+      ${timeBar}
       <span class="status-icon">${statusIcon}</span>
       <div class="event-info">
         <div class="event-title">${escHtml(event.title)}</div>
@@ -1017,14 +1091,19 @@ function renderEventRow(event) {
 }
 
 // 빠른 수정 (모달 없이)
-async function quickFix(eventId, memoEnd) {
+async function quickFix(eventId, memoEnd, nextDay = false) {
   const event = allEvents.find(e => e.id === eventId);
   if (!event) return;
   try {
-    await callModifyAPI(eventId, { endTime: memoEnd });
-    event.endTime = event.endTime.slice(0, 11) + memoEnd;
+    await callModifyAPI(eventId, { endTime: memoEnd, endTimeNextDay: nextDay });
+    const nextDayDate = (() => {
+      const d = new Date(event.startTime.slice(0, 10) + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      return toDateStr(d);
+    })();
+    event.endTime = (nextDay ? nextDayDate : event.startTime.slice(0, 10)) + ' ' + memoEnd;
     renderEvents();
-    showToast(`✅ 종료시간을 ${memoEnd}로 수정했습니다.`);
+    showToast(`✅ 종료시간을 ${nextDay ? '다음날 ' : ''}${memoEnd}로 수정했습니다.`);
   } catch (err) {
     showToast('저장 실패: ' + err.message, true);
   }
@@ -1040,7 +1119,7 @@ function openModal(eventId) {
   const { memoStart, memoEnd, calStart, calEnd, status } = analysis;
 
   document.getElementById('modalTitle').value    = event.title;
-  document.getElementById('modalCalendar').textContent = event.calendar + '  |  ' + event.startTime.slice(0, 10);
+  document.getElementById('modalCalendar').textContent = event.calendar + '  |  ' + formatDateLabel(event.startTime.slice(0, 10));
 
   setTimeCard('calStartVal', calStart, null);
   setTimeCard('calEndVal',   calEnd,   null);
@@ -1058,6 +1137,14 @@ function openModal(eventId) {
   document.getElementById('newEndTime').closest('.time-card').classList.remove('changed');
 
   document.getElementById('notesBox').value = event.notes || '';
+
+  // 이전/다음 버튼 활성화 상태
+  const filtered = document.getElementById('filterWarnings').checked
+    ? allEvents.filter(e => analyzeEvent(e).status === 'warning')
+    : allEvents;
+  const idx = filtered.findIndex(e => e.id === eventId);
+  document.getElementById('modalNavPrev').disabled = idx <= 0;
+  document.getElementById('modalNavNext').disabled = idx >= filtered.length - 1;
 
   document.getElementById('modalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -1089,9 +1176,20 @@ async function deleteEvent() {
     showToast(`🗑️ "${title}" 삭제 완료`);
   } catch (err) {
     showToast('삭제 실패: ' + err.message, true);
+  } finally {
     btn.disabled = false;
     btn.textContent = '삭제';
   }
+}
+
+function navigateModal(dir) {
+  if (!currentEvent) return;
+  const filtered = document.getElementById('filterWarnings').checked
+    ? allEvents.filter(e => analyzeEvent(e).status === 'warning')
+    : allEvents;
+  const idx = filtered.findIndex(e => e.id === currentEvent.id);
+  const next = filtered[idx + dir];
+  if (next) openModal(next.id);
 }
 
 function closeModal() {
@@ -1167,6 +1265,14 @@ async function saveTime() {
 
     closeModal();
     renderEvents();
+    const savedRow = document.querySelector(`.event-row[data-id="${CSS.escape(savedId)}"]`);
+    if (savedRow) {
+      savedRow.classList.remove('saved-highlight');
+      void savedRow.offsetWidth; // reflow로 애니메이션 재시작 보장
+      savedRow.classList.add('saved-highlight');
+      savedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setTimeout(() => savedRow.classList.remove('saved-highlight'), 3000);
+    }
     const parts = [];
     if (changes.title)               parts.push(`제목 → ${changes.title}`);
     if (changes.startTime)           parts.push(`시작 → ${changes.startTime}`);
@@ -1176,14 +1282,6 @@ async function saveTime() {
 
     // 저장 후 EventKit 실제 반영 여부 백그라운드 검증
     verifyAfterSave(savedId, changes);
-
-    setTimeout(() => {
-      const warnings = allEvents.filter(e => analyzeEvent(e).status === 'warning');
-      const savedEvent = allEvents.find(e => e.id === savedId);
-      const next = warnings.find(e => e.startTime > savedEvent.startTime)
-                || (warnings.length > 0 ? warnings[0] : null);
-      if (next) openModal(next.id);
-    }, 400);
   } catch (err) {
     console.error('[saveTime] 저장 실패:', err);
     showToast('저장 실패: ' + err.message, true);
@@ -1459,10 +1557,35 @@ function applyNoteTime(type, time) {
   removeTimePickerPopup();
 }
 
-// ESC 키로 모달 닫기
+// ESC / 좌우 방향키로 모달 닫기 및 이전/다음 이동
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (!currentEvent) return;
+  if (e.key === 'Escape') { closeModal(); return; }
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowLeft')  navigateModal(-1);
+  if (e.key === 'ArrowRight') navigateModal(1);
 });
+
+// 모달 스와이프로 이전/다음 이동 (모바일)
+(function() {
+  let sx = null, sy = null;
+  const modal = document.getElementById('modal');
+  modal.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+  }, { passive: true });
+  modal.addEventListener('touchend', e => {
+    if (sx === null) return;
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    sx = sy = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      navigateModal(dx < 0 ? 1 : -1);
+    }
+  }, { passive: true });
+})();
 
 // 날짜 피커 열릴 때 헤더에 빠른 선택 패널 표시 (touch 기기 전용)
 (function() {

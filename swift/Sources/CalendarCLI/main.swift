@@ -133,8 +133,11 @@ func modifyEvent(params: [String: String]) {
         event.startDate = d
     }
     if let s = params["endTime"] {
-        guard let d = parseTime(s, base: event.startDate) else {
+        guard var d = parseTime(s, base: event.startDate) else {
             printJSON(ErrorResult(error: "Invalid endTime format. Use HH:mm")); return
+        }
+        if let offsetStr = params["endDay"], let offset = Int(offsetStr), offset > 0 {
+            d = Calendar.current.date(byAdding: .day, value: offset, to: d) ?? d
         }
         event.endDate = d
     }
