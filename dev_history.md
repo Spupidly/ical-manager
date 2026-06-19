@@ -741,6 +741,37 @@ iOS Safari는 날짜 선택 즉시 `change`가 발생하지만 picker는 Done을
 
 ---
 
+## v0.6.8 — 2026-06-20 (로그인 비밀번호 저장 지원)
+
+### 문제
+
+`fetch()` 기반 SPA 로그인은 브라우저가 로그인 성공을 감지하지 못해 "비밀번호를 저장하시겠습니까?" 팝업이 뜨지 않음.
+
+### 변경 내용
+
+- 로그인 입력 필드를 `<form autocomplete="on">` 으로 감싸고 버튼을 `type="submit"`으로 변경
+- 로그인 성공 시 Credential Management API 호출 → 브라우저에 자격증명 명시적 전달
+
+```javascript
+if (window.PasswordCredential) {
+  const cred = new PasswordCredential({ id: user, password: pass });
+  navigator.credentials.store(cred);
+}
+```
+
+- `input[type=password]` + `autocomplete="username/current-password"` 는 이미 설정되어 있었음
+- Chrome/Edge: `PasswordCredential`로 저장 팝업 동작
+- Safari: `<form>` 구조로 감지 (지원 범위 제한적)
+- `.login-card form { display: flex; flex-direction: column; gap: 14px; }` — form 감싸기로 깨진 간격 복구
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | `<form>` 래핑, `PasswordCredential` 저장, form gap CSS |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석

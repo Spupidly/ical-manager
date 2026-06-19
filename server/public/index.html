@@ -30,6 +30,7 @@
     gap: 14px;
   }
   .login-card h2 { font-size: 20px; font-weight: 700; color: #333; text-align: center; margin-bottom: 4px; }
+  .login-card form { display: flex; flex-direction: column; gap: 14px; }
   .login-input {
     width: 100%;
     border: 1px solid #d0d0d0;
@@ -707,9 +708,11 @@
 <div id="loginOverlay">
   <div class="login-card">
     <h2>📅 iCal 관리</h2>
-    <input class="login-input" type="text"     id="loginUser" placeholder="아이디" autocomplete="username">
-    <input class="login-input" type="password" id="loginPass" placeholder="비밀번호" autocomplete="current-password">
-    <button class="login-btn" id="loginBtn" onclick="doLogin()">로그인</button>
+    <form onsubmit="doLogin(); return false;" autocomplete="on">
+      <input class="login-input" type="text"     id="loginUser" placeholder="아이디" autocomplete="username">
+      <input class="login-input" type="password" id="loginPass" placeholder="비밀번호" autocomplete="current-password">
+      <button class="login-btn" id="loginBtn" type="submit">로그인</button>
+    </form>
     <div class="login-error" id="loginError"></div>
   </div>
 </div>
@@ -904,6 +907,10 @@ async function doLogin() {
     const data = await res.json();
     if (!res.ok) { err.textContent = data.error || '로그인 실패'; return; }
     setToken(data.token);
+    if (window.PasswordCredential) {
+      const cred = new PasswordCredential({ id: user, password: pass });
+      navigator.credentials.store(cred);
+    }
     hideLogin();
   } catch {
     err.textContent = '서버에 연결할 수 없습니다.';
