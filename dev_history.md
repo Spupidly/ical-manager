@@ -615,6 +615,42 @@ execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, ...)
 
 ---
 
+## v0.6.3 — 2026-06-20 (로그인 브루트포스 방어)
+
+### 배경
+
+외부 접속 환경에서 비밀번호 반복 시도(브루트포스) 공격 방어 필요. IP 화이트리스트는 모바일 환경에서 IP가 수시로 바뀌어 관리 불가 → 실패 누적 기반 블랙리스트 방식 채택.
+
+### 동작 흐름
+
+```
+로그인 요청
+  ├─ 블랙리스트 IP?  → 403 즉시 거부 (LOGIN_BLOCKED)
+  ├─ 인증 비활성화?  → 토큰 발급 (개발 모드, 변경 없음)
+  ├─ 비밀번호 일치?  → 카운터 리셋 + 토큰 발급 (LOGIN_SUCCESS)
+  └─ 불일치
+       ├─ 누적 10회  → blacklist.json 등록 → 403 (LOGIN_BLACKLISTED)
+       ├─ 5~9회      → 30초 대기 → 401 (LOGIN_FAIL, delay:30000)
+       ├─ 3~4회      → 5초 대기  → 401 (LOGIN_FAIL, delay:5000)
+       └─ 1~2회      → 즉시      → 401 (LOGIN_FAIL, delay:0)
+```
+
+- 로그인 성공 시 해당 IP 카운터 리셋
+- 마지막 실패로부터 1시간 경과 시 카운터 자동 리셋 (정상 사용자 구제)
+- 카운터는 메모리 보관 (서버 재시작 시 초기화), 블랙리스트는 파일 영구 보존
+
+### 블랙리스트 해제
+
+`server/blacklist.json`에서 해당 IP 줄 삭제 후 서버 재시작.
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/server.js` | `blacklist` Set + `blacklist.json` 로드/저장, `loginAttempts` Map, `loginDelay()`, `/api/login` 핸들러에 차단·지연 로직 추가 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
