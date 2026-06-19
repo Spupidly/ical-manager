@@ -143,6 +143,22 @@
     white-space: nowrap;
   }
   .filter-toggle input { cursor: pointer; }
+  .btn-logout {
+    background: none;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-logout:hover { border-color: #e74c3c; color: #e74c3c; }
+  /* 모바일: 로그아웃 버튼 숨김, 타이틀 탭으로 대체 */
+  @media (hover: none) and (pointer: coarse) {
+    .btn-logout { display: none; }
+    .header-title-row h1 { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  }
 
   .mode-tabs { display: flex; border: 1px solid #d0d0d0; border-radius: 7px; overflow: hidden; flex-shrink: 0; }
   .mode-tab { background: #fff; border: none; padding: 6px 11px; font-size: 13px; color: #555; cursor: pointer; }
@@ -178,7 +194,7 @@
   .nav-next { right: 8px; }
 
   /* Event List */
-  .event-list { padding: 20px 24px; max-width: 900px; margin: 0 auto; }
+  .event-list { padding: 20px 24px; max-width: 900px; margin: 0 auto; min-height: calc(100vh + 1px); }
   .date-group { margin-bottom: 20px; }
   .date-header {
     font-size: 13px;
@@ -539,7 +555,8 @@
     .notes-box,
     .time-card-input,
     .controls input[type="date"],
-    #singleMonth { font-size: 16px; }
+    #singleMonth,
+    .login-input { font-size: 16px; }
   }
 
   /* 데스크탑(마우스): 클릭(포커스) 시에만 네이티브 time input 표시, blur 시 24h span 복귀 */
@@ -574,7 +591,7 @@
 
 <div class="header">
   <div class="header-title-row">
-    <h1>📅 iCal 관리</h1>
+    <h1 onclick="handleTitleClick()">📅 iCal 관리</h1>
     <label class="filter-toggle">
       <input type="checkbox" id="filterWarnings" onchange="renderEvents()">
       ⚠️만 보기
@@ -585,6 +602,7 @@
       <button class="mode-tab" data-mode="day"   onclick="switchMode('day')">일별</button>
       <button class="mode-tab" data-mode="range" onclick="switchMode('range')">기간</button>
     </div>
+    <button class="btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
   <div class="controls">
     <div id="singleDateWrap" style="display:contents">
@@ -701,9 +719,12 @@ function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 function showLogin(msg) {
   document.getElementById('loginError').textContent = msg || '';
   document.getElementById('loginOverlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
 }
 function hideLogin() {
   document.getElementById('loginOverlay').classList.remove('show');
+  document.body.style.overflow = '';
+  setTimeout(() => window.scrollTo(0, 0), 0);
 }
 
 async function doLogin() {
@@ -746,6 +767,19 @@ async function apiFetch(url, options = {}) {
     throw new Error('인증이 필요합니다.');
   }
   return res;
+}
+
+async function doLogout() {
+  if (!confirm('로그아웃 하시겠습니까?')) return;
+  try {
+    await apiFetch('/api/logout', { method: 'POST' });
+  } catch {}
+  clearToken();
+  showLogin();
+}
+
+function handleTitleClick() {
+  if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) doLogout();
 }
 
 // 페이지 로드 시 토큰 없으면 로그인 화면 표시

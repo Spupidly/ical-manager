@@ -3,6 +3,7 @@ const express = require('express');
 const { execFile } = require('child_process');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = 3000;
@@ -17,6 +18,17 @@ if (!AUTH_ENABLED) {
 
 const validTokens = new Set();
 
+const LOG_PATH = path.join(__dirname, 'auth.log');
+function writeAuthLog(entry) {
+  const line = JSON.stringify({ time: new Date().toISOString(), ...entry }) + '\n';
+  fs.appendFile(LOG_PATH, line, err => { if (err) console.error('[log] write error:', err.message); });
+  console.log('[auth]', line.trimEnd());
+}
+
+function getClientIp(req) {
+  return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+}
+
 const CLI_PATH = process.env.CLI_PATH ||
     path.join(__dirname, '..', 'swift', '.build', 'release', 'CalendarCLI');
 
@@ -25,23 +37,39 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // POST /api/login
 app.post('/api/login', (req, res) => {
+  const ip = getClientIp(req);
   if (!AUTH_ENABLED) {
     const token = crypto.randomBytes(32).toString('hex');
     validTokens.add(token);
+    writeAuthLog({ event: 'LOGIN_SUCCESS', ip, user: '(auth disabled)' });
     return res.json({ token });
   }
   const { user, pass } = req.body;
   if (user === AUTH_USER && pass === AUTH_PASS) {
     const token = crypto.randomBytes(32).toString('hex');
     validTokens.add(token);
+    const maskedPass = pass.length > 2 ? pass.slice(0, 2) + '*'.repeat(pass.length - 2) : '**';
+    writeAuthLog({ event: 'LOGIN_SUCCESS', ip, user, pass: maskedPass });
     return res.json({ token });
   }
+  writeAuthLog({ event: 'LOGIN_FAIL', ip, user: user || '(empty)', pass: pass || '(empty)' });
   res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
 });
 
-// Bearer 토큰 검증 미들웨어 (/api/login 제외)
+// POST /api/logout
+app.post('/api/logout', (req, res) => {
+  const ip = getClientIp(req);
+  const [scheme, token] = (req.headers['authorization'] || '').split(' ');
+  if (scheme === 'Bearer' && token && validTokens.has(token)) {
+    validTokens.delete(token);
+    writeAuthLog({ event: 'LOGOUT', ip });
+  }
+  res.json({ ok: true });
+});
+
+// Bearer 토큰 검증 미들웨어 (/api/login, /api/logout 제외)
 app.use('/api', (req, res, next) => {
-  if (req.path === '/login') return next();
+  if (req.path === '/login' || req.path === '/logout') return next();
   if (!AUTH_ENABLED) return next();
   const [scheme, token] = (req.headers['authorization'] || '').split(' ');
   if (scheme === 'Bearer' && token && validTokens.has(token)) return next();

@@ -381,6 +381,83 @@ HTTP Basic Auth는 모바일에서 팝업 지연이 심해 채택하지 않음.
 
 ---
 
+## v0.5.2 — 2026-06-19 (로그아웃 + 인증 로그)
+
+### 로그아웃 기능
+
+- 헤더 우측에 **로그아웃** 버튼 추가 (호버 시 빨간색)
+- `doLogout()` — `/api/logout` POST 후 localStorage 토큰 삭제 → 로그인 화면 표시
+- `POST /api/logout` 엔드포인트: 서버 측 `validTokens`에서 토큰 제거, IP 기록
+- `/api/logout`은 Bearer 검증 미들웨어 예외 처리 (`/login`과 동일)  
+  (만료된 토큰으로도 로그아웃 화면 진입 가능)
+
+### 인증 이벤트 로그 (`auth.log`)
+
+모든 인증 이벤트를 `server/auth.log`에 JSON 라인 형식으로 기록.  
+서버 콘솔에도 동시 출력.
+
+```json
+{"time":"2026-06-19T10:30:00.000Z","event":"LOGIN_SUCCESS","ip":"192.168.1.1","user":"admin","pass":"my******"}
+{"time":"2026-06-19T10:31:00.000Z","event":"LOGIN_FAIL","ip":"1.2.3.4","user":"admin","pass":"wrongpass"}
+{"time":"2026-06-19T11:00:00.000Z","event":"LOGOUT","ip":"192.168.1.1"}
+```
+
+| 이벤트 | 기록 항목 |
+|--------|-----------|
+| `LOGIN_SUCCESS` | IP, user, pass (앞 2자리 + `*` 마스킹) |
+| `LOGIN_FAIL` | IP, user, pass (평문 — 공격 패턴 분석용) |
+| `LOGOUT` | IP |
+
+- IP 추출: `X-Forwarded-For` 헤더 우선, 없으면 `req.ip`
+- `auth.log`는 `.gitignore`의 `*.log` 패턴으로 Git 제외
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/server.js` | `fs` 모듈 추가, `writeAuthLog()`, `getClientIp()`, 로그인/로그아웃 로그, `POST /api/logout` 엔드포인트, 미들웨어 예외 추가 |
+| `server/public/index.html` | 로그아웃 버튼 CSS/HTML, `doLogout()` 함수 |
+
+---
+
+## v0.5.3 — 2026-06-19 (모바일 UX 버그 수정)
+
+### 로그아웃 확인 다이얼로그
+
+`doLogout()` 호출 시 `confirm()` 으로 재확인 후 진행.
+
+### 모바일 로그아웃 UX
+
+- 모바일(`hover: none and pointer: coarse`)에서 로그아웃 버튼 숨김 → 레이아웃 줄바꿈 방지
+- 대신 타이틀(`📅 iCal 관리`) 탭 → `doLogout()` 호출
+- `handleTitleClick()` — `matchMedia`로 터치 기기 판별, 데스크탑에서는 타이틀 탭 무반응
+
+### 버그 수정
+
+#### 로그인 후 헤더 타이틀 행 미표시 (iOS Safari sticky 미동작)
+
+**증상**: 빈 화면(이벤트 미조회 상태)에서 헤더 타이틀 행이 스크롤 시 위로 사라지고 컨트롤 행만 고정됨. 이벤트 목록 로드 후에는 정상.  
+**원인**: 페이지 콘텐츠 높이 < 뷰포트 높이일 때 iOS Safari에서 `position: sticky`가 제대로 동작하지 않음.  
+**수정**: `.event-list`에 `min-height: calc(100vh + 1px)` 추가 → 항상 스크롤 컨텍스트 확보.
+
+추가로 로그인 오버레이 표시 중 배경 스크롤 방지 (`body.overflow = 'hidden'`), 로그인 완료 시 `setTimeout(() => scrollTo(0, 0), 0)` 으로 스크롤 위치 초기화.
+
+#### 로그인 후 화면 확대 (iOS Safari 자동 줌)
+
+**증상**: 로그인 후 메인 화면이 확대된 채로 표시되고 좌우 스크롤 발생.  
+**원인**: `font-size < 16px`인 `input`에 포커스 시 iOS Safari가 자동 줌인, blur 후 복원 안 됨.  
+**수정**: `.login-input`을 모바일 `font-size: 16px` 규칙에 추가.
+
+> **원칙**: 모바일 `input` 폰트 크기는 항상 16px 이상 유지 (iOS 자동 줌 방지).
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | 로그아웃 confirm, 모바일 타이틀 탭 로그아웃, `.event-list min-height`, 로그인 오버레이 body overflow 처리, `.login-input` 16px |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
