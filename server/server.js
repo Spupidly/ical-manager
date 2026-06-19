@@ -4,6 +4,7 @@ const { execFile } = require('child_process');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const geoip = require('geoip-lite');
 
 const app = express();
 const PORT = process.env.PORT || 8765;
@@ -73,6 +74,24 @@ const CLI_PATH = process.env.CLI_PATH ||
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// 허용 국가 목록 (기본값: KR, 환경변수로 확장 가능 — 예: ALLOWED_COUNTRIES=KR,JP)
+const ALLOWED_COUNTRIES = new Set(
+  (process.env.ALLOWED_COUNTRIES || 'KR').split(',').map(c => c.trim().toUpperCase())
+);
+
+// 허용 국가 외 IP의 API 접근 차단
+app.use('/api', (req, res, next) => {
+  if (!AUTH_ENABLED) return next();
+  const ip = getClientIp(req);
+  const geo = geoip.lookup(ip);
+  // geo가 null이면 로컬/사설 IP → 허용
+  if (geo && !ALLOWED_COUNTRIES.has(geo.country)) {
+    writeAuthLog({ event: 'GEO_BLOCKED', ip, country: geo.country });
+    return res.status(403).json({ error: '접근이 제한된 지역입니다.' });
+  }
+  next();
+});
 
 // POST /api/login
 app.post('/api/login', async (req, res) => {

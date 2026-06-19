@@ -7,6 +7,6 @@ if [ ! -f "$CLI" ]; then
   exit 1
 fi
 
-echo "🚀 서버 시작: http://localhost:3000"
+echo "🚀 서버 시작: http://localhost:8765"
 cd "$BASE_DIR/server"
 node server.js

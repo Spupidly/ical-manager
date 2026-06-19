@@ -658,6 +658,28 @@ execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, ...)
 
 ---
 
+## v0.6.5 — 2026-06-20 (지오블록 — 허용 국가 외 접근 차단)
+
+### 변경 내용
+
+- `geoip-lite` 패키지 추가 (로컬 GeoIP DB, 외부 API 호출 없음)
+- `/api/*` 미들웨어에서 허용 국가 외 IP 403 차단, `GEO_BLOCKED` 로그 기록
+- 로컬/사설 IP(`geoip.lookup()` → null)는 항상 허용
+- 허용 국가 목록을 환경변수로 관리: `ALLOWED_COUNTRIES=KR` (콤마 구분으로 확장 가능)
+- `AUTH_ENABLED=false`(개발 모드)일 때는 지오블록 비활성화
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/server.js` | `geoip-lite` import, `ALLOWED_COUNTRIES` Set 구성, 지오블록 미들웨어 추가 |
+| `server/.env` | `ALLOWED_COUNTRIES=KR` 추가 |
+| `server/package.json` | `geoip-lite` 의존성 추가 |
+| `CLAUDE.md` | 환경변수 표, 보안 섹션, API 표 업데이트 |
+| `README.md` | 포트·환경변수 설정·보안·API 섹션 업데이트 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
