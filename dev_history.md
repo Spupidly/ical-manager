@@ -651,6 +651,13 @@ execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, ...)
 
 ---
 
+## v0.6.4 — 2026-06-20 (기본 포트 변경)
+
+- `PORT` 기본값 3000 → **8765** 변경
+- 환경변수 `PORT`로 오버라이드 가능: `const PORT = process.env.PORT || 8765`
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
