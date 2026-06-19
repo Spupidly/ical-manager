@@ -164,6 +164,7 @@
   .mode-tab { background: #fff; border: none; padding: 6px 11px; font-size: 13px; color: #555; cursor: pointer; }
   .mode-tab + .mode-tab { border-left: 1px solid #d0d0d0; }
   .mode-tab.active { background: #007aff; color: #fff; font-weight: 600; }
+  .tab-s { display: none; }
   #rangeWrap { align-items: center; gap: 8px; }
 
   .nav-arrow {
@@ -283,7 +284,7 @@
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.45);
-    z-index: 200;
+    z-index: 250;
     overflow-y: auto;
     padding: 20px;
   }
@@ -559,6 +560,89 @@
     .login-input { font-size: 16px; }
   }
 
+  /* 모바일: 검색유형 탭 폭 축소 (줄바꿈 방지, iPhone 16 Pro Max 440px 포함) */
+  @media (max-width: 600px) {
+    .mode-tab { padding: 4px 7px; font-size: 12px; }
+  }
+  /* 소형 화면 (≤390px, iPhone X/SE 등): 탭 레이블 단축 */
+  @media (max-width: 390px) {
+    .header-title-row { gap: 5px; }
+    .mode-tab { padding: 4px 5px; font-size: 11px; }
+    .tab-l { display: none; }
+    .tab-s { display: inline; }
+    .btn-view-toggle { padding: 4px 7px; font-size: 11px; }
+  }
+
+  /* 요약 보기 토글 */
+  .btn-view-toggle {
+    background: none;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: #555;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-view-toggle.active { background: #007aff; border-color: #007aff; color: #fff; font-weight: 600; }
+  .btn-view-toggle:hover:not(.active) { border-color: #999; color: #333; }
+
+  /* 요약 뷰 */
+  .summary-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #e8e8e8;
+    margin-bottom: 5px;
+  }
+  .summary-row.clickable { cursor: pointer; }
+  .summary-row.clickable:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .summary-row.warn-row { border-left: 3px solid #ffc107; }
+  .summary-row.no-events { background: transparent; border-color: #eee; }
+  .summary-date-label { font-size: 12px; font-weight: 600; color: #555; min-width: 108px; flex-shrink: 0; }
+  .summary-date-label.warn { color: #856404; }
+  .summary-timeline { flex: 1; position: relative; height: 18px; background: #f0f2f5; border-radius: 3px; overflow: hidden; min-width: 60px; }
+  .summary-seg { position: absolute; top: 1px; bottom: 1px; border-radius: 2px; min-width: 3px; }
+  .summary-seg.ok      { background: #28a745; opacity: 0.85; }
+  .summary-seg.warning { background: #ffa500; }
+  .summary-seg.no-memo { background: #adb5bd; opacity: 0.7; }
+  .summary-meta { font-size: 11px; color: #999; min-width: 48px; text-align: right; flex-shrink: 0; }
+  .summary-meta.warn { color: #856404; font-weight: 600; }
+
+  /* 일별 상세 팝업 */
+  .day-detail-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .day-detail-overlay.open { display: flex; align-items: flex-start; justify-content: center; }
+  .day-detail {
+    background: #fff;
+    border-radius: 12px;
+    width: 480px;
+    max-width: 100%;
+    margin: auto 0;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+    overflow: hidden;
+  }
+  .day-detail-header {
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #eee;
+  }
+  .day-detail-title { font-size: 15px; font-weight: 700; color: #333; }
+  .day-detail-body { padding: 10px 10px; max-height: 70vh; overflow-y: auto; }
+
   /* 데스크탑(마우스): 클릭(포커스) 시에만 네이티브 time input 표시, blur 시 24h span 복귀 */
   @media (hover: hover) and (pointer: fine) {
     .time-card-val-wrap { cursor: pointer; }
@@ -597,11 +681,12 @@
       ⚠️만 보기
     </label>
     <div class="mode-tabs">
-      <button class="mode-tab active" data-mode="month" onclick="switchMode('month')">월별</button>
-      <button class="mode-tab" data-mode="week"  onclick="switchMode('week')">주별</button>
-      <button class="mode-tab" data-mode="day"   onclick="switchMode('day')">일별</button>
+      <button class="mode-tab active" data-mode="month" onclick="switchMode('month')"><span class="tab-l">월별</span><span class="tab-s">월</span></button>
+      <button class="mode-tab" data-mode="week"  onclick="switchMode('week')"><span class="tab-l">주별</span><span class="tab-s">주</span></button>
+      <button class="mode-tab" data-mode="day"   onclick="switchMode('day')"><span class="tab-l">일별</span><span class="tab-s">일</span></button>
       <button class="mode-tab" data-mode="range" onclick="switchMode('range')">기간</button>
     </div>
+    <button class="btn-view-toggle" id="btnViewToggle" onclick="toggleSummaryView()">요약</button>
     <button class="btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
   <div class="controls">
@@ -706,6 +791,17 @@
   </div>
 </div>
 
+<!-- Day Detail Overlay -->
+<div class="day-detail-overlay" id="dayDetailOverlay" onclick="handleDayDetailOverlayClick(event)">
+  <div class="day-detail" id="dayDetail">
+    <div class="day-detail-header">
+      <div class="day-detail-title" id="dayDetailTitle"></div>
+      <button class="btn-close" onclick="closeDayDetail()">✕</button>
+    </div>
+    <div class="day-detail-body" id="dayDetailBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -716,14 +812,30 @@ function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
 function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 
+// 스크롤바 소멸로 인한 레이아웃 시프트 방지
+function lockScroll() {
+  const sw = window.innerWidth - document.documentElement.clientWidth;
+  if (sw > 0) document.body.style.paddingRight = sw + 'px';
+  document.body.style.overflow = 'hidden';
+}
+function unlockScroll() {
+  const loginOpen  = document.getElementById('loginOverlay').classList.contains('show');
+  const modalOpen  = document.getElementById('modalOverlay').classList.contains('open');
+  const detailOpen = document.getElementById('dayDetailOverlay').classList.contains('open');
+  if (!loginOpen && !modalOpen && !detailOpen) {
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+  }
+}
+
 function showLogin(msg) {
   document.getElementById('loginError').textContent = msg || '';
   document.getElementById('loginOverlay').classList.add('show');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 function hideLogin() {
   document.getElementById('loginOverlay').classList.remove('show');
-  document.body.style.overflow = '';
+  unlockScroll();
   setTimeout(() => window.scrollTo(0, 0), 0);
 }
 
@@ -800,6 +912,8 @@ let currentEvent = null;
 let initStart = null, initEnd = null; // 모달 열릴 때 입력란 초기값 (비교 기준)
 let currentMode = 'month';
 let lastQueryStart = '', lastQueryEnd = '';
+let viewMode = 'normal'; // 'normal' | 'summary'
+let currentDayDetailDate = null;
 
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1057,6 +1171,40 @@ async function fetchEvents() {
   }
 }
 
+// 요약/일반 뷰 전환
+function toggleSummaryView() {
+  const visibleDate = getCenterVisibleDate();
+  viewMode = viewMode === 'normal' ? 'summary' : 'normal';
+  document.getElementById('btnViewToggle').classList.toggle('active', viewMode === 'summary');
+  renderEvents();
+  if (visibleDate) scrollToDateInView(visibleDate);
+}
+
+// 현재 화면 중앙에 보이는 날짜 반환
+function getCenterVisibleDate() {
+  const cy  = window.scrollY + window.innerHeight / 2;
+  const sel = viewMode === 'normal' ? '.date-header' : '.summary-date-label';
+  let best = null, bestDist = Infinity;
+  document.querySelectorAll(sel).forEach(el => {
+    const rect = el.getBoundingClientRect();
+    const mid  = window.scrollY + rect.top + rect.height / 2;
+    const dist = Math.abs(mid - cy);
+    if (dist < bestDist) { bestDist = dist; best = el; }
+  });
+  return best ? best.textContent.slice(0, 10) : null;
+}
+
+// 전환 후 해당 날짜 요소가 화면 중앙에 오도록 스크롤
+function scrollToDateInView(dateStr) {
+  const sel = viewMode === 'summary' ? '.summary-date-label' : '.date-header';
+  for (const el of document.querySelectorAll(sel)) {
+    if (el.textContent.startsWith(dateStr)) {
+      el.scrollIntoView({ behavior: 'instant', block: 'center' });
+      return;
+    }
+  }
+}
+
 // 이벤트 렌더링
 function renderEvents() {
   const filterOn = document.getElementById('filterWarnings').checked;
@@ -1069,6 +1217,12 @@ function renderEvents() {
     badge.textContent   = `⚠️ ${warnings.length}건 / 총 ${allEvents.length}건`;
   } else {
     badge.style.display = 'none';
+  }
+
+  if (viewMode === 'summary') {
+    renderSummaryView();
+    if (currentDayDetailDate) renderDayDetailBody();
+    return;
   }
 
   const container = document.getElementById('eventList');
@@ -1097,6 +1251,89 @@ function renderEvents() {
   });
 
   container.innerHTML = html;
+}
+
+function renderSummaryView() {
+  const container = document.getElementById('eventList');
+  if (!lastQueryStart || !lastQueryEnd) {
+    container.innerHTML = '<div class="empty-state">기간을 선택하고 조회 버튼을 눌러주세요.</div>';
+    return;
+  }
+
+  // 조회 기간 내 모든 날짜 생성
+  const dates = [];
+  const cur   = new Date(lastQueryStart + 'T00:00:00');
+  const fin   = new Date(lastQueryEnd   + 'T00:00:00');
+  while (cur <= fin) {
+    dates.push(toDateStr(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  let html = '';
+  dates.forEach(date => {
+    const dayEvents  = allEvents.filter(e => e.startTime.slice(0, 10) === date);
+    const analyses   = dayEvents.map(analyzeEvent);
+    const warnCount  = analyses.filter(a => a.status === 'warning').length;
+    const hasWarning = warnCount > 0;
+    const noEvents   = dayEvents.length === 0;
+
+    const rowCls  = noEvents ? 'no-events' : hasWarning ? 'clickable warn-row' : 'clickable';
+    const onclick = !noEvents ? `onclick="openDayDetail('${date}')"` : '';
+
+    // 24시간 타임라인 세그먼트
+    let segments = '';
+    dayEvents.forEach((e, i) => {
+      let sh = parseInt(e.startTime.slice(11,13)) * 60 + parseInt(e.startTime.slice(14,16));
+      let eh = parseInt(e.endTime.slice(11,13))   * 60 + parseInt(e.endTime.slice(14,16));
+      if (e.endTime.slice(0,10) > e.startTime.slice(0,10)) eh = 1440; // 다음날 종료 → 오늘 끝까지
+      const leftPct  = (sh / 1440 * 100).toFixed(2);
+      const widthPct = (Math.max(eh - sh, 30) / 1440 * 100).toFixed(2); // 최소 30분 가시성
+      segments += `<div class="summary-seg ${analyses[i].status}" style="left:${leftPct}%;width:${widthPct}%"></div>`;
+    });
+
+    const metaText = noEvents
+      ? '─'
+      : hasWarning
+        ? `⚠️ ${warnCount}/${dayEvents.length}`
+        : `✅ ${dayEvents.length}`;
+
+    html += `
+      <div class="summary-row ${rowCls}" ${onclick}>
+        <div class="summary-date-label${hasWarning ? ' warn' : ''}">${escHtml(formatDateLabel(date))}</div>
+        <div class="summary-timeline">${segments}</div>
+        <div class="summary-meta${hasWarning ? ' warn' : ''}">${metaText}</div>
+      </div>`;
+  });
+
+  container.innerHTML = html || '<div class="empty-state">조회 결과가 없습니다.</div>';
+}
+
+// 일별 상세 팝업
+function openDayDetail(dateStr) {
+  currentDayDetailDate = dateStr;
+  document.getElementById('dayDetailTitle').textContent = formatDateLabel(dateStr);
+  renderDayDetailBody();
+  document.getElementById('dayDetailOverlay').classList.add('open');
+  lockScroll();
+}
+
+function renderDayDetailBody() {
+  if (!currentDayDetailDate) return;
+  const dayEvents = allEvents.filter(e => e.startTime.slice(0, 10) === currentDayDetailDate);
+  const body = document.getElementById('dayDetailBody');
+  body.innerHTML = dayEvents.length
+    ? dayEvents.map(renderEventRow).join('')
+    : '<div class="empty-state" style="padding:30px 20px">일정이 없습니다.</div>';
+}
+
+function closeDayDetail() {
+  document.getElementById('dayDetailOverlay').classList.remove('open');
+  unlockScroll();
+  currentDayDetailDate = null;
+}
+
+function handleDayDetailOverlayClick(e) {
+  if (e.target === document.getElementById('dayDetailOverlay')) closeDayDetail();
 }
 
 function renderEventRow(event) {
@@ -1195,7 +1432,7 @@ function openModal(eventId) {
   document.getElementById('modalNavNext').disabled = idx >= filtered.length - 1;
 
   document.getElementById('modalOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  lockScroll();
 }
 
 function setTimeCard(id, value, cssClass) {
@@ -1242,7 +1479,7 @@ function navigateModal(dir) {
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open');
-  document.body.style.overflow = '';
+  unlockScroll();
   currentEvent = null;
 }
 
@@ -1610,8 +1847,12 @@ function applyNoteTime(type, time) {
 
 // ESC / 좌우 방향키로 모달 닫기 및 이전/다음 이동
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (currentEvent)          { closeModal();     return; }
+    if (currentDayDetailDate)  { closeDayDetail(); return; }
+    return;
+  }
   if (!currentEvent) return;
-  if (e.key === 'Escape') { closeModal(); return; }
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
   if (e.key === 'ArrowLeft')  navigateModal(-1);

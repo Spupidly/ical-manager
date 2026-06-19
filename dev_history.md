@@ -458,6 +458,80 @@ HTTP Basic Auth는 모바일에서 팝업 지연이 심해 채택하지 않음.
 
 ---
 
+## v0.6.0 — 2026-06-19 (요약 보기 + 레이아웃 시프트 방지 + 모바일 헤더 반응형)
+
+### 요약 보기 (Summary View)
+
+#### 모드 전환 토글
+- 헤더 우측에 **요약** 버튼 추가 (활성 시 파란 배경)
+- 클릭 시 목록 뷰 ↔ 요약 뷰 전환. 조회 데이터는 유지됨.
+- 전환 시 화면 중앙 날짜를 기억(`getCenterVisibleDate()`), 전환 후 동일 날짜로 스크롤(`scrollToDateInView()`)
+
+#### 요약 뷰 레이아웃
+
+조회 기간 내 **모든 날짜**를 한 행씩 표시 (이벤트 없는 날 포함):
+
+```
+[날짜 레이블] [━━━━━━━ 24시간 타임라인 ━━━━━━━] [건수]
+```
+
+- 타임라인 바: 각 일정을 24시간 축 위치에 맞춰 컬러 세그먼트로 표시
+  - ✅ ok → 초록, ⚠️ warning → 주황, 📝 no-memo → 회색
+  - 다음날 걸치는 일정은 오늘 끝(`eh = 1440`)까지 표시
+  - 최소 30분 폭으로 가시성 보장
+- 우측 메타: `⚠️ N/총건`(경고 있음) / `✅ N`(정상) / `─`(이벤트 없음)
+- 이벤트 없는 날: 배경 투명, 테두리 연회색
+
+#### 일별 상세 팝업
+
+- 이벤트 있는 날짜 → 클릭 가능 (포인터 커서, hover 그림자)
+- ⚠️ 경고 있는 날짜 → 추가로 주황 왼쪽 테두리 강조
+- 클릭 시 해당 날짜의 이벤트 카드 목록을 팝업(z-index 200)으로 표시
+- 카드 클릭 → 기존 편집 모달(z-index 250) 열림 (팝업 위에 표시)
+- 저장 후 요약 뷰 + 팝업 내용 자동 갱신
+- ESC 키, 바깥 클릭, ✕ 버튼으로 닫기
+
+### 모달 열림 시 레이아웃 시프트 방지
+
+**증상**: 스크롤바 있는 상태에서 팝업이 열리면 `overflow: hidden`으로 스크롤바가 사라지며 콘텐츠 폭이 증가 → 헤더·카드가 우측으로 밀림.
+
+**수정**: `lockScroll()` / `unlockScroll()` 헬퍼 추가.
+
+```javascript
+function lockScroll() {
+  const sw = window.innerWidth - document.documentElement.clientWidth;
+  if (sw > 0) document.body.style.paddingRight = sw + 'px'; // 스크롤바 너비 보정
+  document.body.style.overflow = 'hidden';
+}
+function unlockScroll() {
+  // 세 오버레이(로그인·편집모달·일별팝업) 모두 닫혔을 때만 해제
+  if (!loginOpen && !modalOpen && !detailOpen) { overflow = ''; paddingRight = ''; }
+}
+```
+
+모든 오버레이 open/close 함수에 적용. 중첩 오버레이(팝업 + 편집 모달)에서 먼저 닫히는 쪽이 잘못 해제하지 않음.
+
+### 모바일 헤더 탭 반응형 축소
+
+요약 버튼 추가로 iPhone 16 Pro Max(440px) 등에서 타이틀 행 줄바꿈 발생 → 미디어쿼리로 탭 크기 단계적 축소.
+
+| 화면 폭 | 탭 레이블 | 패딩 / 폰트 |
+|---------|----------|------------|
+| > 600px | 월별 / 주별 / 일별 / 기간 | 6px 11px / 13px (기존) |
+| ≤ 600px | 월별 / 주별 / 일별 / 기간 | 4px 7px / 12px |
+| ≤ 390px | 월 / 주 / 일 / 기간 | 4px 5px / 11px |
+
+- `<span class="tab-l">` (일반) / `<span class="tab-s">` (소형 화면) 두 벌을 HTML에 유지, CSS `display`로 전환 → JS 없이 즉각 반응
+- ≤ 390px: `.header-title-row gap: 5px`, `.btn-view-toggle` 패딩·폰트도 축소
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | 요약 뷰 CSS/HTML/JS, 일별 상세 팝업, lockScroll/unlockScroll, 탭 반응형 미디어쿼리 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
