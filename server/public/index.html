@@ -90,6 +90,16 @@
     cursor: pointer;
   }
   .controls input[type="date"]:focus { border-color: #007aff; }
+  #singleYear {
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    background: #fff;
+  }
+  #singleYear:focus { border-color: #007aff; }
   .btn-search {
     background: #007aff;
     color: #fff;
@@ -557,12 +567,17 @@
     .time-card-input,
     .controls input[type="date"],
     #singleMonth,
+    #singleYear,
     .login-input { font-size: 16px; }
   }
 
   /* 모바일: 검색유형 탭 폭 축소 (줄바꿈 방지, iPhone 16 Pro Max 440px 포함) */
   @media (max-width: 600px) {
     .mode-tab { padding: 4px 7px; font-size: 12px; }
+  }
+  /* 모바일 세로 모드: '기간' 탭 숨김 */
+  @media (max-width: 600px) and (orientation: portrait) {
+    .mode-tab[data-mode="range"] { display: none; }
   }
   /* 소형 화면 (≤390px, iPhone X/SE 등): 탭 레이블 단축 */
   @media (max-width: 390px) {
@@ -681,6 +696,7 @@
       ⚠️만 보기
     </label>
     <div class="mode-tabs">
+      <button class="mode-tab" data-mode="year"  onclick="switchMode('year')"><span class="tab-l">연별</span><span class="tab-s">연</span></button>
       <button class="mode-tab active" data-mode="month" onclick="switchMode('month')"><span class="tab-l">월별</span><span class="tab-s">월</span></button>
       <button class="mode-tab" data-mode="week"  onclick="switchMode('week')"><span class="tab-l">주별</span><span class="tab-s">주</span></button>
       <button class="mode-tab" data-mode="day"   onclick="switchMode('day')"><span class="tab-l">일별</span><span class="tab-s">일</span></button>
@@ -691,6 +707,7 @@
   </div>
   <div class="controls">
     <div id="singleDateWrap" style="display:contents">
+      <select id="singleYear" style="display:none;"></select>
       <input type="month" id="singleMonth">
       <input type="date"  id="singleDate" style="display:none">
     </div>
@@ -932,6 +949,12 @@ function getDateRange() {
     return { start: document.getElementById('startDate').value,
              end:   document.getElementById('endDate').value };
   }
+  if (currentMode === 'year') {
+    const val = document.getElementById('singleYear').value;
+    if (!val) return { start: '', end: '' };
+    const y = parseInt(val);
+    return { start: `${y}-01-01`, end: `${y}-12-31` };
+  }
   if (currentMode === 'month') {
     const val = document.getElementById('singleMonth').value; // YYYY-MM
     if (!val) return { start: '', end: '' };
@@ -958,16 +981,22 @@ function switchMode(mode) {
     btn.classList.toggle('active', btn.dataset.mode === mode)
   );
   const isRange = mode === 'range';
+  const isYear  = mode === 'year';
   const isMonth = mode === 'month';
-  document.getElementById('singleDateWrap').style.display = isRange                ? 'none'     : 'contents';
-  document.getElementById('rangeWrap').style.display      = isRange                ? 'flex'     : 'none';
-  document.getElementById('singleMonth').style.display    = (!isRange && isMonth)  ? ''         : 'none';
-  document.getElementById('singleDate').style.display     = (!isRange && !isMonth) ? ''         : 'none';
+  document.getElementById('singleDateWrap').style.display  = isRange                              ? 'none'     : 'contents';
+  document.getElementById('rangeWrap').style.display       = isRange                              ? 'flex'     : 'none';
+  document.getElementById('singleYear').style.display      = (!isRange && isYear)                ? ''         : 'none';
+  document.getElementById('singleMonth').style.display     = (!isRange && isMonth)               ? ''         : 'none';
+  document.getElementById('singleDate').style.display      = (!isRange && !isMonth && !isYear)   ? ''         : 'none';
 }
 
 // 이전/다음 기간으로 이동 후 재조회
 function navigatePeriod(dir) {
-  if (currentMode === 'month') {
+  if (currentMode === 'year') {
+    const val = document.getElementById('singleYear').value;
+    if (!val) return;
+    document.getElementById('singleYear').value = parseInt(val) + dir;
+  } else if (currentMode === 'month') {
     const val = document.getElementById('singleMonth').value;
     if (!val) return;
     const [y, m] = val.split('-').map(Number);
@@ -1011,7 +1040,9 @@ function navigatePeriod(dir) {
 function gotoThisMonth() {
   const t = new Date();
   const y = t.getFullYear(), m = String(t.getMonth() + 1).padStart(2, '0');
-  if (currentMode === 'month') {
+  if (currentMode === 'year') {
+    document.getElementById('singleYear').value = y;
+  } else if (currentMode === 'month') {
     document.getElementById('singleMonth').value = `${y}-${m}`;
   } else if (currentMode === 'week' || currentMode === 'day') {
     document.getElementById('singleDate').value = toDateStr(t);
@@ -1027,7 +1058,9 @@ function gotoThisMonth() {
 function gotoToday() {
   const t = new Date();
   const y = t.getFullYear(), m = String(t.getMonth() + 1).padStart(2, '0');
-  if (currentMode === 'month') {
+  if (currentMode === 'year') {
+    document.getElementById('singleYear').value = y;
+  } else if (currentMode === 'month') {
     document.getElementById('singleMonth').value = `${y}-${m}`;
   } else if (currentMode === 'week' || currentMode === 'day') {
     document.getElementById('singleDate').value = toDateStr(t);
@@ -1042,6 +1075,15 @@ function gotoToday() {
   const today = new Date();
   const y = today.getFullYear(), m = String(today.getMonth() + 1).padStart(2, '0');
   const d = String(today.getDate()).padStart(2, '0');
+  // 연별 선택 옵션 생성 (iOS에서 드럼롤 피커로 표시됨)
+  const yearSel = document.getElementById('singleYear');
+  for (let yr = 2000; yr <= 2040; yr++) {
+    const opt = document.createElement('option');
+    opt.value = yr;
+    opt.textContent = yr + '년';
+    yearSel.appendChild(opt);
+  }
+  document.getElementById('singleYear').value  = y;
   document.getElementById('singleMonth').value = `${y}-${m}`;
   document.getElementById('singleDate').value  = `${y}-${m}-${d}`;
   document.getElementById('startDate').value   = `${y}-${m}-01`;
@@ -1049,7 +1091,8 @@ function gotoToday() {
   // 초기 모드: month → singleDate 숨기기
   document.getElementById('singleDate').style.display = 'none';
 
-  // 날짜/월 입력 변경 시 자동 재조회
+  // 날짜/월/연 입력 변경 시 자동 재조회
+  document.getElementById('singleYear').addEventListener('change', fetchEvents);
   document.getElementById('singleMonth').addEventListener('change', fetchEvents);
   document.getElementById('singleDate').addEventListener('change', fetchEvents);
   document.getElementById('startDate').addEventListener('change', fetchEvents);

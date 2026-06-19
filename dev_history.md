@@ -583,6 +583,38 @@ execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, ...)
 
 ---
 
+## v0.6.2 — 2026-06-19 (연별 조회 추가 + 모바일 탭 개선)
+
+### 변경 내용
+
+#### 1. 연별(year) 조회 모드 추가
+
+- 모드 탭 맨 앞에 **연별** 추가 → 탭 순서: 연별 / 월별 / 주별 / 일별 / 기간
+- 연도 선택 컨트롤: `<select>` 사용 → **iOS에서 네이티브 드럼롤(다이얼) 피커**로 표시
+  - 옵션 범위: 2000년~2040년
+  - ‹/› 네비게이션 버튼으로도 연도 이동 가능
+- `getDateRange()` — year 모드: `YYYY-01-01 ~ YYYY-12-31` 반환
+- `switchMode()` — `singleYear` 표시/숨김 처리 추가
+- `initDates()` — 옵션 생성 및 초기값(올해) 설정
+
+#### 2. 모바일 세로 모드에서 '기간' 탭 숨김
+
+```css
+@media (max-width: 600px) and (orientation: portrait) {
+  .mode-tab[data-mode="range"] { display: none; }
+}
+```
+
+사용 빈도가 낮은 '기간' 탭을 모바일 세로 모드에서 제거해 헤더 줄바꿈 방지. 가로 모드에서는 그대로 표시.
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | 연별 탭·`<select>` 컨트롤 추가, 기간 탭 모바일 세로 숨김, year 모드 JS 전반 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
