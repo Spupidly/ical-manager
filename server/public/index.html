@@ -1144,7 +1144,22 @@ function analyzeEvent(event) {
   return { status, times, memoStart, memoEnd, memoEndNextDay, memoEndLine, calStart, calEnd };
 }
 
-// API 호출
+// 날짜 범위를 월 단위 청크로 분할 (각 청크를 별도 API 호출로 처리해 대용량 출력 방지)
+function dateRangeToMonthChunks(start, end) {
+  const chunks = [];
+  let cur = new Date(start + 'T00:00:00');
+  const fin = new Date(end + 'T00:00:00');
+  while (cur <= fin) {
+    const s = toDateStr(cur);
+    const monthLast = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+    const e = toDateStr(monthLast <= fin ? monthLast : fin);
+    chunks.push({ start: s, end: e });
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+  return chunks;
+}
+
+// API 호출 (월 단위 병렬 청크로 분할 → 버퍼·타임아웃 문제 원천 방지)
 async function fetchEvents() {
   const { start, end } = getDateRange();
   if (!start || !end) { showToast('기간을 선택해주세요.'); return; }
@@ -1157,10 +1172,16 @@ async function fetchEvents() {
   document.getElementById('eventList').innerHTML = '<div class="loading">캘린더 데이터를 불러오는 중...</div>';
 
   try {
-    const res = await apiFetch(`/api/events?start=${start}&end=${end}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    allEvents = data;
+    const chunks = dateRangeToMonthChunks(start, end);
+    const results = await Promise.all(
+      chunks.map(async ({ start: s, end: e }) => {
+        const res  = await apiFetch(`/api/events?start=${s}&end=${e}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+      })
+    );
+    allEvents = results.flat().sort((a, b) => a.startTime.localeCompare(b.startTime));
     renderEvents();
   } catch (err) {
     document.getElementById('eventList').innerHTML =

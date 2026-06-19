@@ -78,7 +78,7 @@ app.use('/api', (req, res, next) => {
 
 function runCLI(args) {
     return new Promise((resolve, reject) => {
-        execFile(CLI_PATH, args, { timeout: 30000 }, (error, stdout, stderr) => {
+        execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
             if (error && !stdout) {
                 return reject(new Error(stderr || error.message));
             }

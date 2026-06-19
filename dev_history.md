@@ -532,6 +532,57 @@ function unlockScroll() {
 
 ---
 
+## v0.6.1 — 2026-06-19 (장기 조회 오류 수정 — 월 단위 청크 병렬 조회)
+
+### 문제
+
+조회 기간이 길 때(예: 1년 이상) 아래 오류 발생:
+
+```
+오류: CLI output parse failed: [ { "notes" : "2025\/01\/01...
+```
+
+### 원인
+
+`execFile`의 기본 `maxBuffer`(1MB)를 단일 CLI 호출이 초과할 경우, stdout이 중간에 잘린 채 전달되어 `JSON.parse()` 실패. 메모가 긴 이벤트가 많은 장기 범위에서 재현.
+
+### 수정
+
+#### 1. `maxBuffer` 상향 (server.js)
+
+```javascript
+execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, ...)
+```
+
+단일 월 범위 등 소규모 호출에 대한 방어 목적으로 유지.
+
+#### 2. 월 단위 청크 병렬 조회 (근본 해결, index.html)
+
+`dateRangeToMonthChunks(start, end)` — 조회 범위를 월 경계로 분할:
+
+```
+1년 조회 → [1월] [2월] ... [12월]  ← Promise.all 병렬 실행
+             각 CLI 호출은 1개월치만 처리 (수 KB 이하)
+           ↓
+        results.flat().sort(startTime)  →  allEvents
+```
+
+| 항목 | 기존 | 변경 후 |
+|------|------|---------|
+| API 호출 횟수 | 1회 | N회 (월 수만큼) |
+| 실행 방식 | 단일 순차 | `Promise.all` 병렬 |
+| 단기 조회 | — | 청크 1개 → 동작 동일 |
+| 버퍼 위험 | 범위 비례 | 항상 1개월치 이하 |
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/server.js` | `execFile maxBuffer: 50MB` 추가 |
+| `server/public/index.html` | `dateRangeToMonthChunks()` 추가, `fetchEvents()` → 청크 병렬 조회로 교체 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석
