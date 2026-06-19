@@ -680,6 +680,67 @@ execFile(CLI_PATH, args, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }, ...)
 
 ---
 
+## v0.6.6 — 2026-06-20 (검색 UI 개선 — 월별 select, 높이 통일, 접속 표시)
+
+### 변경 내용
+
+#### 1. 월별 검색 컨트롤을 `<select>` 두 개로 교체
+
+- `<input type="month">` 제거 → `<select id="singleMonthYear">` + `<select id="singleMonthMonth">`
+- 연별(singleYear)과 동일한 스타일 → iOS 드럼롤 피커로 통일
+- 관련 JS 전반 업데이트: `getDateRange()`, `switchMode()`, `navigatePeriod()`, `gotoThisMonth()`, `gotoToday()`, `initDates()`
+- `.controls select` 공통 CSS로 통합 (`#singleYear` 개별 규칙 제거)
+
+#### 2. 모바일 controls 라인 높이 통일
+
+- `@media (max-width: 768px)`: `select`, `input[type="date"]`, `.btn-search` 모두 `height: 34px; box-sizing: border-box`
+- 폰트 16px 유지하면서 버튼과 입력창 높이 동일하게 맞춤
+
+#### 3. 로컬/외부 접속 표시 개선
+
+- 기존: controls 라인에 `🏠 로컬 · host:port` 텍스트 표시
+- 변경: 아이콘(🏠/🌐)만 표시, 클릭 시 `🏠 로컬 — host:port` 팝업
+- 외부 클릭 시 팝업 자동 닫힘
+
+#### 4. 경고 뱃지 위치 변경
+
+- 조회 버튼 뒤 → 검색 입력창 앞으로 이동
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | 월별 select 교체, 높이 통일 CSS, 접속 아이콘 팝업, 뱃지 위치 |
+
+---
+
+## v0.6.7 — 2026-06-20 (버그 수정 + UX 개선)
+
+### 변경 내용
+
+#### 1. `initDates()` 크래시 버그 수정
+
+`singleMonthMonth.value` 초기화 시 `t.getMonth()` → `today.getMonth()` 오타 수정.  
+`t`가 미정의(undefined)여서 IIFE가 크래시되었고, 이후 `const DATE_HEADER_RE` 선언이 실행되지 않아 이벤트 리스너 미등록 + `DATE_HEADER_RE` TDZ 오류가 연쇄 발생.
+
+#### 2. 일별/주별 date picker 자동 닫힘
+
+`singleDate` 의 `change` 이벤트에서 `this.blur()` 호출.  
+iOS Safari는 날짜 선택 즉시 `change`가 발생하지만 picker는 Done을 눌러야 닫히는 문제 해결.
+
+#### 3. 조회 버튼 폭 고정
+
+- 로딩 텍스트: `'조회 중...'` → `'…'`
+- `initDates()` 마지막에 `btn.style.width = btn.offsetWidth + 'px'` — 실제 렌더링 폭을 고정해 텍스트 변경 시 레이아웃 변동 방지
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | `today.getMonth()` 수정, blur(), 버튼 폭 고정 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석

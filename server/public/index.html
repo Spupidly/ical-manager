@@ -73,6 +73,24 @@
     margin-bottom: 12px;
   }
   .header-title-row h1 { margin-right: auto; }
+  .server-ip-wrap { position: relative; margin-right: auto; line-height: 1; }
+  .server-ip-icon { font-size: 16px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .server-ip-popup {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: #fff;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12px;
+    color: #333;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.13);
+    z-index: 50;
+  }
+  .server-ip-popup.show { display: block; }
   .controls {
     display: flex;
     align-items: center;
@@ -90,7 +108,7 @@
     cursor: pointer;
   }
   .controls input[type="date"]:focus { border-color: #007aff; }
-  #singleYear {
+  .controls select {
     border: 1px solid #d0d0d0;
     border-radius: 6px;
     padding: 6px 10px;
@@ -99,7 +117,7 @@
     cursor: pointer;
     background: #fff;
   }
-  #singleYear:focus { border-color: #007aff; }
+  .controls select:focus { border-color: #007aff; }
   .btn-search {
     background: #007aff;
     color: #fff;
@@ -566,9 +584,17 @@
     .notes-box,
     .time-card-input,
     .controls input[type="date"],
-    #singleMonth,
-    #singleYear,
+    .controls select,
     .login-input { font-size: 16px; }
+    /* controls 라인: 입력창·버튼 높이 통일 */
+    .controls input[type="date"],
+    .controls select,
+    .btn-search {
+      height: 34px;
+      box-sizing: border-box;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
   }
 
   /* 모바일: 검색유형 탭 폭 축소 (줄바꿈 방지, iPhone 16 Pro Max 440px 포함) */
@@ -706,9 +732,15 @@
     <button class="btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
   <div class="controls">
+    <div class="server-ip-wrap">
+      <span class="server-ip-icon" id="serverIpIcon" onclick="toggleServerIpPopup()"></span>
+      <div class="server-ip-popup" id="serverIpPopup"></div>
+    </div>
+    <span class="badge-warning" id="warningBadge" style="display:none"></span>
     <div id="singleDateWrap" style="display:contents">
       <select id="singleYear" style="display:none;"></select>
-      <input type="month" id="singleMonth">
+      <select id="singleMonthYear"></select>
+      <select id="singleMonthMonth"></select>
       <input type="date"  id="singleDate" style="display:none">
     </div>
     <div id="rangeWrap" style="display:none">
@@ -718,7 +750,6 @@
       <input type="date" id="endDate">
     </div>
     <button class="btn-search" id="btnSearch" onclick="fetchEvents()">조회</button>
-    <span class="badge-warning" id="warningBadge" style="display:none"></span>
   </div>
   <!-- 날짜 피커 열릴 때 헤더 하단에 표시되는 빠른 선택 패널 (touch 기기 전용) -->
   <div id="dateQuickPanel">
@@ -956,9 +987,9 @@ function getDateRange() {
     return { start: `${y}-01-01`, end: `${y}-12-31` };
   }
   if (currentMode === 'month') {
-    const val = document.getElementById('singleMonth').value; // YYYY-MM
-    if (!val) return { start: '', end: '' };
-    const [y, m] = val.split('-').map(Number);
+    const y = parseInt(document.getElementById('singleMonthYear').value);
+    const m = parseInt(document.getElementById('singleMonthMonth').value);
+    if (!y || !m) return { start: '', end: '' };
     return { start: toDateStr(new Date(y, m - 1, 1)),
              end:   toDateStr(new Date(y, m, 0)) };
   }
@@ -985,9 +1016,10 @@ function switchMode(mode) {
   const isMonth = mode === 'month';
   document.getElementById('singleDateWrap').style.display  = isRange                              ? 'none'     : 'contents';
   document.getElementById('rangeWrap').style.display       = isRange                              ? 'flex'     : 'none';
-  document.getElementById('singleYear').style.display      = (!isRange && isYear)                ? ''         : 'none';
-  document.getElementById('singleMonth').style.display     = (!isRange && isMonth)               ? ''         : 'none';
-  document.getElementById('singleDate').style.display      = (!isRange && !isMonth && !isYear)   ? ''         : 'none';
+  document.getElementById('singleYear').style.display       = (!isRange && isYear)                ? ''     : 'none';
+  document.getElementById('singleMonthYear').style.display  = (!isRange && isMonth)               ? ''     : 'none';
+  document.getElementById('singleMonthMonth').style.display = (!isRange && isMonth)               ? ''     : 'none';
+  document.getElementById('singleDate').style.display       = (!isRange && !isMonth && !isYear)   ? ''     : 'none';
 }
 
 // 이전/다음 기간으로 이동 후 재조회
@@ -997,12 +1029,12 @@ function navigatePeriod(dir) {
     if (!val) return;
     document.getElementById('singleYear').value = parseInt(val) + dir;
   } else if (currentMode === 'month') {
-    const val = document.getElementById('singleMonth').value;
-    if (!val) return;
-    const [y, m] = val.split('-').map(Number);
+    const y = parseInt(document.getElementById('singleMonthYear').value);
+    const m = parseInt(document.getElementById('singleMonthMonth').value);
+    if (!y || !m) return;
     const next = new Date(y, m - 1 + dir, 1);
-    document.getElementById('singleMonth').value =
-      `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('singleMonthYear').value  = next.getFullYear();
+    document.getElementById('singleMonthMonth').value = next.getMonth() + 1;
   } else if (currentMode === 'week') {
     const val = document.getElementById('singleDate').value;
     if (!val) return;
@@ -1043,7 +1075,8 @@ function gotoThisMonth() {
   if (currentMode === 'year') {
     document.getElementById('singleYear').value = y;
   } else if (currentMode === 'month') {
-    document.getElementById('singleMonth').value = `${y}-${m}`;
+    document.getElementById('singleMonthYear').value  = y;
+    document.getElementById('singleMonthMonth').value = t.getMonth() + 1;
   } else if (currentMode === 'week' || currentMode === 'day') {
     document.getElementById('singleDate').value = toDateStr(t);
   } else if (currentMode === 'range') {
@@ -1061,7 +1094,8 @@ function gotoToday() {
   if (currentMode === 'year') {
     document.getElementById('singleYear').value = y;
   } else if (currentMode === 'month') {
-    document.getElementById('singleMonth').value = `${y}-${m}`;
+    document.getElementById('singleMonthYear').value  = y;
+    document.getElementById('singleMonthMonth').value = t.getMonth() + 1;
   } else if (currentMode === 'week' || currentMode === 'day') {
     document.getElementById('singleDate').value = toDateStr(t);
   } else if (currentMode === 'range') {
@@ -1075,29 +1109,72 @@ function gotoToday() {
   const today = new Date();
   const y = today.getFullYear(), m = String(today.getMonth() + 1).padStart(2, '0');
   const d = String(today.getDate()).padStart(2, '0');
-  // 연별 선택 옵션 생성 (iOS에서 드럼롤 피커로 표시됨)
+  // 연별 선택 옵션 생성
   const yearSel = document.getElementById('singleYear');
   for (let yr = 2000; yr <= 2040; yr++) {
     const opt = document.createElement('option');
-    opt.value = yr;
-    opt.textContent = yr + '년';
+    opt.value = yr; opt.textContent = yr + '년';
     yearSel.appendChild(opt);
   }
-  document.getElementById('singleYear').value  = y;
-  document.getElementById('singleMonth').value = `${y}-${m}`;
-  document.getElementById('singleDate').value  = `${y}-${m}-${d}`;
-  document.getElementById('startDate').value   = `${y}-${m}-01`;
-  document.getElementById('endDate').value     = `${y}-${m}-${d}`;
-  // 초기 모드: month → singleDate 숨기기
-  document.getElementById('singleDate').style.display = 'none';
+  // 월별 — 연도 선택
+  const monthYearSel = document.getElementById('singleMonthYear');
+  for (let yr = 2000; yr <= 2040; yr++) {
+    const opt = document.createElement('option');
+    opt.value = yr; opt.textContent = yr + '년';
+    monthYearSel.appendChild(opt);
+  }
+  // 월별 — 월 선택
+  const monthMonthSel = document.getElementById('singleMonthMonth');
+  for (let mo = 1; mo <= 12; mo++) {
+    const opt = document.createElement('option');
+    opt.value = mo; opt.textContent = mo + '월';
+    monthMonthSel.appendChild(opt);
+  }
 
-  // 날짜/월/연 입력 변경 시 자동 재조회
+  document.getElementById('singleYear').value       = y;
+  document.getElementById('singleMonthYear').value  = y;
+  document.getElementById('singleMonthMonth').value = today.getMonth() + 1;
+  document.getElementById('singleDate').value       = `${y}-${m}-${d}`;
+  document.getElementById('startDate').value        = `${y}-${m}-01`;
+  document.getElementById('endDate').value          = `${y}-${m}-${d}`;
+  // 초기 모드: month → singleDate·singleYear 숨기기
+  document.getElementById('singleDate').style.display = 'none';
+  document.getElementById('singleYear').style.display = 'none';
+
+  // 입력 변경 시 자동 재조회
   document.getElementById('singleYear').addEventListener('change', fetchEvents);
-  document.getElementById('singleMonth').addEventListener('change', fetchEvents);
-  document.getElementById('singleDate').addEventListener('change', fetchEvents);
+  document.getElementById('singleMonthYear').addEventListener('change', fetchEvents);
+  document.getElementById('singleMonthMonth').addEventListener('change', fetchEvents);
+  document.getElementById('singleDate').addEventListener('change', function() {
+    this.blur();
+    fetchEvents();
+  });
   document.getElementById('startDate').addEventListener('change', fetchEvents);
   document.getElementById('endDate').addEventListener('change', fetchEvents);
+
+  // '조회' 버튼 폭을 렌더링 후 실제 크기로 고정 (텍스트 변경 시 레이아웃 변동 방지)
+  const btnSearch = document.getElementById('btnSearch');
+  btnSearch.style.width = btnSearch.offsetWidth + 'px';
 })();
+
+// 로컬/외부 접속 표시 (아이콘만, 클릭 시 팝업)
+(function() {
+  const host = window.location.hostname;
+  const isLocal = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  const icon  = isLocal ? '🏠' : '🌐';
+  const label = isLocal ? '로컬' : '외부';
+  document.getElementById('serverIpIcon').textContent  = icon;
+  document.getElementById('serverIpPopup').textContent = `${icon} ${label} — ${window.location.host}`;
+})();
+
+function toggleServerIpPopup() {
+  document.getElementById('serverIpPopup').classList.toggle('show');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.server-ip-wrap')) {
+    document.getElementById('serverIpPopup').classList.remove('show');
+  }
+});
 
 // HH:mm 패턴 추출 (날짜 헤더가 있으면 해당 날짜 섹션만, 없으면 전체)
 // 날짜 헤더 감지: "2026/05/21" 또는 "2026/05/ 22" 처럼 슬래시 뒤 공백 허용
@@ -1211,7 +1288,7 @@ async function fetchEvents() {
 
   const btn = document.getElementById('btnSearch');
   btn.disabled = true;
-  btn.textContent = '조회 중...';
+  btn.textContent = '…';
   document.getElementById('eventList').innerHTML = '<div class="loading">캘린더 데이터를 불러오는 중...</div>';
 
   try {
@@ -1947,7 +2024,7 @@ document.addEventListener('keydown', e => {
 (function() {
   const isTouch = () => navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
   const panel   = document.getElementById('dateQuickPanel');
-  const dateInputIds = ['singleMonth', 'singleDate', 'startDate', 'endDate'];
+  const dateInputIds = ['singleDate', 'startDate', 'endDate'];
   let hideTimer = null;
 
   function showPanel() {
