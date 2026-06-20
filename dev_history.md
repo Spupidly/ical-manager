@@ -772,6 +772,30 @@ if (window.PasswordCredential) {
 
 ---
 
+## v0.6.9 — 2026-06-20 (기본 검색유형 변경 + 초기 자동 조회)
+
+### 변경 내용
+
+- 기본 검색유형을 '월별' → **'주별'**로 변경
+  - `currentMode = 'week'`, 탭 `active` 클래스 이동
+  - `initDates()`: 월별 select 숨기고 `singleDate` 명시적 표시
+- 페이지 진입 시 **자동 조회**: 로그인 상태이면 `initDates()` 완료 후 즉시 `fetchEvents()` 호출
+  - 기존 토큰 보유 상태로 진입 시에도 동작
+  - 로그인 후 `hideLogin()` 경로도 동작 (setTimeout 내 호출)
+
+### 버그 수정
+
+- 자동 조회 호출을 `initDates()` IIFE 이전에 배치해 날짜값 미초기화 상태에서 조회하던 문제 수정
+  → `initDates()` 끝으로 이동
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `server/public/index.html` | 기본 모드 week, initDates 초기 표시 수정, 자동 조회 |
+
+---
+
 ## 예정 작업
 
 - [ ] `POST /api/events/:id/analyze` — Claude API 연동 AI 메모 분석

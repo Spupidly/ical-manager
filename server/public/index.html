@@ -726,8 +726,8 @@
     </label>
     <div class="mode-tabs">
       <button class="mode-tab" data-mode="year"  onclick="switchMode('year')"><span class="tab-l">연별</span><span class="tab-s">연</span></button>
-      <button class="mode-tab active" data-mode="month" onclick="switchMode('month')"><span class="tab-l">월별</span><span class="tab-s">월</span></button>
-      <button class="mode-tab" data-mode="week"  onclick="switchMode('week')"><span class="tab-l">주별</span><span class="tab-s">주</span></button>
+      <button class="mode-tab" data-mode="month" onclick="switchMode('month')"><span class="tab-l">월별</span><span class="tab-s">월</span></button>
+      <button class="mode-tab active" data-mode="week"  onclick="switchMode('week')"><span class="tab-l">주별</span><span class="tab-s">주</span></button>
       <button class="mode-tab" data-mode="day"   onclick="switchMode('day')"><span class="tab-l">일별</span><span class="tab-s">일</span></button>
       <button class="mode-tab" data-mode="range" onclick="switchMode('range')">기간</button>
     </div>
@@ -887,7 +887,7 @@ function showLogin(msg) {
 function hideLogin() {
   document.getElementById('loginOverlay').classList.remove('show');
   unlockScroll();
-  setTimeout(() => window.scrollTo(0, 0), 0);
+  setTimeout(() => { window.scrollTo(0, 0); fetchEvents(); }, 0);
 }
 
 async function doLogin() {
@@ -965,7 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let allEvents = [];
 let currentEvent = null;
 let initStart = null, initEnd = null; // 모달 열릴 때 입력란 초기값 (비교 기준)
-let currentMode = 'month';
+let currentMode = 'week';
 let lastQueryStart = '', lastQueryEnd = '';
 let viewMode = 'normal'; // 'normal' | 'summary'
 let currentDayDetailDate = null;
@@ -1144,9 +1144,11 @@ function gotoToday() {
   document.getElementById('singleDate').value       = `${y}-${m}-${d}`;
   document.getElementById('startDate').value        = `${y}-${m}-01`;
   document.getElementById('endDate').value          = `${y}-${m}-${d}`;
-  // 초기 모드: month → singleDate·singleYear 숨기기
-  document.getElementById('singleDate').style.display = 'none';
-  document.getElementById('singleYear').style.display = 'none';
+  // 초기 모드: week → singleYear·월별 select 숨기고 singleDate 표시
+  document.getElementById('singleYear').style.display       = 'none';
+  document.getElementById('singleMonthYear').style.display  = 'none';
+  document.getElementById('singleMonthMonth').style.display = 'none';
+  document.getElementById('singleDate').style.display       = '';
 
   // 입력 변경 시 자동 재조회
   document.getElementById('singleYear').addEventListener('change', fetchEvents);
@@ -1162,6 +1164,9 @@ function gotoToday() {
   // '조회' 버튼 폭을 렌더링 후 실제 크기로 고정 (텍스트 변경 시 레이아웃 변동 방지)
   const btnSearch = document.getElementById('btnSearch');
   btnSearch.style.width = btnSearch.offsetWidth + 'px';
+
+  // 토큰이 있으면 초기화 완료 후 자동 조회
+  if (getToken()) fetchEvents();
 })();
 
 // 로컬/외부 접속 표시 (아이콘만, 클릭 시 팝업)
